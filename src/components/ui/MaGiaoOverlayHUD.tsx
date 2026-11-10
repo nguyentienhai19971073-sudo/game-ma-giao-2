@@ -250,7 +250,8 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
       return {
         id: r.id,
         coins: r.minCoins,
-        name: r.displayName,
+        formattedX: `${r.minCoins.toLocaleString('vi-VN')} X`,
+        name: r.displayName || r.name,
         textColor,
         coreColor,
         flameColor,
@@ -259,6 +260,7 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
   }, [config.ranks]);
 
   const dietMonThreshold = config.dietMonConfig?.coinThreshold || 1000;
+  const formattedDietMonX = `${dietMonThreshold.toLocaleString('vi-VN')} X`;
 
   return (
     <div
@@ -398,7 +400,7 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
                     <span className="text-white font-bold">{elder.compactName}</span>
                   </div>
                   <span className="text-yellow-300 font-mono font-bold shrink-0 tabular-nums text-[7.5px]">
-                    {elder.totalCoins}x
+                    {elder.totalCoins.toLocaleString('vi-VN')} X
                   </span>
                 </div>
               ))}
@@ -407,11 +409,11 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
         </div>
       )}
 
-      {/* 4. UPPER-RIGHT FIXED PANEL: BẢNG PHONG CẤP (CUSTOM MA GIÁO SVG EMBLEMS, NO GIFT EMOJIS) */}
+      {/* 4. UPPER-RIGHT FIXED PANEL: BẢNG PHONG ẤN MA GIÁO (CUSTOM MA GIÁO SVG EMBLEMS, X UNIT, NO GIFT EMOJIS) */}
       {overlayConfig.showGiftRankTable && isPanelEnabled('gift_rank_table') && (
         <div
           data-testid="panel-gift-rank-table"
-          className="magiao-hud-panel absolute right-1.5 z-20 w-[28.5%] rounded-lg border border-[#D4AF37]/70 p-1.5 shadow-md"
+          className="magiao-hud-panel absolute right-1.5 z-20 w-[29%] rounded-lg border border-[#D4AF37]/70 p-1.5 shadow-md"
           style={{
             top: '8.2%',
             backgroundColor: `rgba(12, 8, 22, ${panelBgOpacity})`,
@@ -420,24 +422,24 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
         >
           <div className="text-[8px] font-bold uppercase tracking-wider text-amber-300 border-b border-amber-400/35 pb-0.5 mb-0.5 flex items-center gap-1">
             <MaGiaoRankEmblemSVG coreColor="#EF4444" flameColor="#F59E0B" />
-            <span>PHONG CẤP</span>
+            <span>PHONG ẤN</span>
           </div>
-          <div className="space-y-0.5 text-[7.5px] leading-tight tabular-nums font-semibold">
+          <div className="space-y-0.5 text-[7.5px] leading-tight tabular-nums font-semibold max-h-[160px] overflow-y-auto">
             {phongCapRows.map(row => (
               <div key={row.id} className="flex items-center justify-between text-white">
-                <span className="flex items-center font-mono text-amber-100">
+                <span className="flex items-center font-mono text-amber-100 shrink-0">
                   <MaGiaoRankEmblemSVG coreColor={row.coreColor} flameColor={row.flameColor} />
-                  {row.coins}
+                  {row.formattedX}
                 </span>
                 <span className={`truncate ml-1 ${row.textColor}`}>{row.name}</span>
               </div>
             ))}
             <div className="flex items-center justify-between text-red-200 font-bold pt-0.5 border-t border-amber-400/40">
-              <span className="flex items-center font-mono text-yellow-300">
+              <span className="flex items-center font-mono text-yellow-300 shrink-0">
                 <MaGiaoRankEmblemSVG coreColor="#DC2626" flameColor="#FACC15" isApocalypse />
-                {dietMonThreshold}
+                {formattedDietMonX}
               </span>
-              <span className="text-red-400 tracking-tight">DIỆT MÔN</span>
+              <span className="text-red-400 tracking-tight truncate ml-1">DIỆT MÔN</span>
             </div>
           </div>
         </div>
@@ -556,14 +558,14 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
           </div>
         )}
 
-      {/* 7. TEMPORARY PROMOTION / THRONE TRANSFER BANNER (AUTO-HIDE AFTER 4S + 0.7S FADE-OUT, OPACITY 0.4, NEVER COVERS SECT LEADER FACE) */}
+      {/* 7. TEMPORARY GIFT / PROMOTION / THRONE TRANSFER BANNER (NO COIN/X/XU VALUE DISPLAYED, AUTO-HIDE AFTER 4S + 0.7S FADE-OUT, OPACITY 0.4) */}
       {latestPromotion &&
         promotionFade.visible &&
         ((latestPromotion.isThroneTakeover && isPanelEnabled('throne_transfer_banner')) ||
           (!latestPromotion.isThroneTakeover && isPanelEnabled('promotion_banner'))) && (
           <div
             data-testid="popup-promotion-banner"
-            className={`magiao-hud-panel pointer-events-none absolute left-3 right-3 z-30 rounded-xl p-2 text-center border transition-opacity duration-150 shadow-2xl ${
+            className={`magiao-hud-panel pointer-events-none absolute left-3 right-3 z-30 rounded-xl px-2.5 py-2 border transition-opacity duration-150 shadow-2xl flex items-center gap-2.5 ${
               latestPromotion.isThroneTakeover
                 ? 'border-yellow-300/85'
                 : 'border-[#D4AF37]/80'
@@ -577,15 +579,55 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
               ...CRISP_TEXT_SHADOW,
             }}
           >
-            <div className="text-[9.5px] font-bold uppercase tracking-widest text-amber-300">
-              {latestPromotion.isThroneTakeover
-                ? '🐉 ĐẠI LỄ ĐĂNG CƠ TÂN GIÁO CHỦ 🐉'
-                : '✨ SẮC PHONG CẤP BẬC MA GIÁO ✨'}
+            {/* Sender Avatar or Ma Ấn Sacred Emblem */}
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-amber-400/90 bg-[#180926] shrink-0 flex items-center justify-center shadow-md">
+              {latestPromotion.avatarUrl ? (
+                <img
+                  src={latestPromotion.avatarUrl}
+                  alt={latestPromotion.displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <MaGiaoRankEmblemSVG
+                  coreColor={latestPromotion.isThroneTakeover ? '#EF4444' : '#A855F7'}
+                  flameColor="#FACC15"
+                />
+              )}
             </div>
-            <div className="text-[11px] font-bold text-white mt-0.5">
-              <span className="text-yellow-300">{latestPromotion.displayName}</span> dâng{' '}
-              <span className="text-amber-300">{latestPromotion.giftName}</span> ➔ Vinh thăng{' '}
-              <span className="text-red-300 underline">{latestPromotion.newRankName}</span>!
+
+            <div className="flex-1 min-w-0 text-left">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-amber-300 truncate">
+                {latestPromotion.isThroneTakeover
+                  ? '🐉 ĐẠI LỄ ĐĂNG CƠ GIÁO CHỦ 🐉'
+                  : latestPromotion.isPromotion !== false
+                  ? '✨ SẮC PHONG CẤP BẬC MA GIÁO ✨'
+                  : '🔥 LỄ VẬT DÂNG ĐẠI ĐIỆN MA GIÁO 🔥'}
+              </div>
+              <div className="text-[10.5px] font-bold text-white truncate mt-0.5">
+                {latestPromotion.isPromotion !== false ? (
+                  <>
+                    <span className="text-yellow-300">{latestPromotion.displayName}</span>
+                    {' – PHONG CHỨC '}
+                    <span className="text-red-300 uppercase underline">
+                      {latestPromotion.newRankName}
+                    </span>
+                    !
+                  </>
+                ) : (
+                  <>
+                    <span className="text-yellow-300">{latestPromotion.displayName}</span>
+                    {' dâng '}
+                    <span className="text-amber-300">
+                      {latestPromotion.giftName
+                        .replace(/\(\s*\+?\d[\d.,]*\s*(?:xu|x)?\s*\)/gi, '')
+                        .replace(/\b\+?\d[\d.,]*\s*(?:xu|x)\b/gi, '')
+                        .replace(/\b\d+\b/g, '')
+                        .trim() || 'Bảo Vật Ma Giáo'}
+                    </span>
+                    !
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -673,7 +715,7 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
         );
       })}
 
-      {/* 9B. ĐẠI SỰ KIỆN DIỆT MÔN (1.000 XU) CENTRAL AVATAR, ROTATING MA ẤN & PHASE BANNER */}
+      {/* 9B. ĐẠI SỰ KIỆN DIỆT MÔN CENTRAL AVATAR, ROTATING MA ẤN & PHASE BANNER (NO 1.000 XU / 1.000 X IN POPUP) */}
       {dietMon?.isActive && (
         <div
           data-testid="overlay-diet-mon"
@@ -691,7 +733,7 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
               ⚡ MA GIÁO ĐẠI KIẾP • DIỆT MÔN ({Math.max(0, Math.ceil((1 - dietMon.progress) * (config.dietMonConfig?.durationSec || 15)))}s) ⚡
             </div>
             <div className="text-[11.5px] font-extrabold text-amber-300 mt-0.5">
-              {dietMon.triggerDisplayName} ĐÃ KÍCH HOẠT DIỆT MÔN!
+              {dietMon.triggerDisplayName} KÍCH HOẠT DIỆT MÔN!
             </div>
             <div className="text-[8.5px] text-purple-200 font-semibold mt-0.5">
               {dietMon.phase === 'tremor' && 'Giai đoạn 1/5: Đại Điện Rung Chuyển Dữ Dội (0–3s)'}
@@ -773,13 +815,13 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
                   </div>
                 </div>
 
-                {/* Trigger Player Display Name & Title Badge */}
+                {/* Trigger Player Display Name & Title Badge (No coin/xu/X value displayed) */}
                 <div className="mt-2 px-4 py-1 rounded-full bg-gradient-to-r from-red-950/90 via-purple-950/95 to-red-950/90 border-2 border-amber-400 text-center shadow-2xl">
                   <div className="text-xs font-extrabold text-yellow-300 tracking-wide">
                     {dietMon.triggerDisplayName}
                   </div>
                   <div className="text-[9px] font-bold text-red-300 uppercase tracking-widest">
-                    BÁ CHỦ DIỆT MÔN • {dietMon.triggerCoins} XU
+                    KÍCH HOẠT DIỆT MÔN
                   </div>
                 </div>
               </div>

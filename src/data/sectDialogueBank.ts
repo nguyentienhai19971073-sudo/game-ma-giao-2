@@ -358,7 +358,7 @@ const MINIGAME_LOSE_TEXTS: string[] = [
   'Nhìn năm bóng dáng đang lom khom cầm chổi quét lá sau khi trượt {gameName} kìa, vừa thương vừa buồn cười!',
   'Bổn tọa đã dặn kỹ luật chơi {gameName} rồi mà vẫn có người bấm nhầm hướng, làm cả đội lỡ mất chiến thắng!',
   'Góc sân quét lá hôm nay lại có khách quý ghé thăm sau màn thử thách {gameName} đầy sóng gió!',
-  'Nhớ kỹ nhé các đồ đệ đang quét sân: không bị trừ xu hay hạ cấp đâu, chỉ cần gõ một câu bình luận bất kỳ là hết phạt ngay!',
+  'Nhớ kỹ nhé các đồ đệ đang quét sân: không bị trừ công trạng hay hạ cấp đâu, chỉ cần gõ một câu bình luận bất kỳ là hết phạt ngay!',
   'Thất bại trong {gameName} chỉ là tạm thời, nhưng cảnh tượng cao thủ Ma Giáo đi quét lá rơi thì đúng là hiếm có khó tìm!',
   'Hộ Pháp đâu, phát chổi tre loại tốt nhất cho mấy đệ tử chưa kịp hoàn thành {gameName} tập cơ tay vài phút nào!',
   'Chỉ thiếu đúng vài cánh tay nữa thôi là {gameName} đã thành công mỹ mãn rồi, lần sau toàn giáo nhớ tập trung hơn nhé!',
@@ -461,15 +461,15 @@ const THRONE_TRANSFER_TEXTS: string[] = [
 ];
 
 const DIET_MON_TEXTS: string[] = [
-  'Không ổn rồi! Đại điện Ma Giáo đang rung chuyển! Là ai đã kích hoạt đại kiếp một nghìn xu?!',
+  'Không ổn rồi! Đại điện Ma Giáo đang rung chuyển! Là ai đã kích hoạt đại kiếp Diệt Môn kinh thiên động địa?!',
   'Trời đất ơi, cả đại điện sập thật rồi! Đồ đệ chạy đâu hết rồi?!',
   'Là {playerName}! Chính người này đã mở vòng xoáy Diệt Môn cuốn bay toàn bộ môn đồ!',
   'Tất cả môn đồ đều bị hút vào hư không! Ai còn sống mau bình luận một câu để quay lại đại điện!',
   'Đại điện đã khôi phục! Môn đồ đâu, mau xuất hiện lại cho bổn tọa điểm danh!',
-  'Một nghìn xu giáng thế! {playerName} vừa thi triển Thiên Ma Diệt Môn Đại Pháp làm sập cả trụ rồng!',
+  'Bá chủ Diệt Môn giáng thế! {playerName} vừa thi triển Thiên Ma Diệt Môn Đại Pháp làm sập cả trụ rồng!',
   'Giáo Chủ ta còn suýt bị hút bay mất dép! {playerName} ra tay thật là kinh thiên động địa!',
   'Vòng xoáy Ma Ấn của {playerName} đã quét sạch đại điện trong chớp mắt! Mau bình luận để tái nhập sơn môn!',
-  'Tái thiết đại điện hoàn tất! Cấp bậc và tổng xu của chư vị vẫn còn nguyên, mau gõ chat bước vào cổng lớn!',
+  'Tái thiết đại điện hoàn tất! Cấp bậc và tổng công trạng X của chư vị vẫn còn nguyên, mau gõ chat bước vào cổng lớn!',
   'Lịch sử Ma Giáo ghi nhận đại kiếp Diệt Môn do {playerName} khởi phát! Sảnh đường đã sẵn sàng đón anh hùng trở lại!'
 ];
 
@@ -580,5 +580,5 @@ export const DIALOGUE_CATEGORY_LABELS: Record<DialogueCategory, string> = {
   elder_coleader: '8. Tương tác Trưởng Lão & Đồng Tôn (20 câu)',
   quiet_hall: '9. Khi đại điện vắng (20 câu)',
   throne_transfer: '10. Chuyển giao Ngai Vàng (20 câu)',
-  diet_mon: '11. Đại Sự Kiện DIỆT MÔN 1.000 Xu (10 câu)',
+  diet_mon: '11. Đại Sự Kiện DIỆT MÔN 1.000 X (10 câu)',
 };

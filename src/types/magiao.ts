@@ -288,9 +288,18 @@ export interface SectDisciple {
   vortexAngle?: number;
 }
 
+export interface GiftItemMetadata {
+  giftId: string;
+  giftName: string;
+  enabled: boolean;
+}
+
 export interface GiftMappingConfig {
   id: string;
+  groupName?: string;
   giftIds: number[];
+  giftIdStrings?: string[];
+  giftItems?: Record<string, GiftItemMetadata>;
   giftId?: number;
   giftName: string;
   coinValue: number;
@@ -308,8 +317,11 @@ export interface GiftMappingConfig {
 }
 
 export interface GiftMappingInput {
-  giftIds?: number[];
-  giftId?: number;
+  groupName?: string;
+  giftIds?: (number | string)[];
+  giftIdStrings?: string[];
+  giftItems?: Record<string, GiftItemMetadata>;
+  giftId?: number | string;
   giftName: string;
   coinValue: number;
   rankGranted?: RankTierId;
@@ -323,10 +335,24 @@ export interface GiftMappingInput {
   enabled?: boolean;
 }
 
+export interface BulkGiftIdCheckResult {
+  rawCount: number;
+  validNewIds: string[];
+  invalidTokens: string[];
+  duplicateInBatchIds: string[];
+  alreadyInSameGroupIds: string[];
+  conflictOtherGroups: {
+    giftId: string;
+    groupId: string;
+    groupName: string;
+    coinValue: number;
+  }[];
+}
+
 export interface UnknownGiftLog {
   id: string;
   timestamp: number;
-  giftId?: number;
+  giftId?: number | string;
   giftName: string;
   senderName: string;
   repeatCount: number;
@@ -338,6 +364,7 @@ export interface PromotionAnnouncement {
   timestamp: number;
   userId: string;
   displayName: string;
+  avatarUrl?: string;
   oldRankName: string;
   newRankId: RankTierId;
   newRankName: string;
@@ -345,6 +372,7 @@ export interface PromotionAnnouncement {
   coinValue: number;
   isThroneTakeover: boolean;
   isCoLeader: boolean;
+  isPromotion?: boolean;
 }
 
 export type AccumulationMode = 'session' | 'persistent';
@@ -428,7 +456,7 @@ export interface GiftHistoryEntry {
   userId: string;
   uniqueId: string;
   displayName: string;
-  giftId?: number;
+  giftId?: number | string;
   giftName: string;
   repeatCount: number;
   addedCoins: number;
@@ -746,7 +774,7 @@ export interface TikTokLiveEvent {
   nickname: string;
   avatarUrl?: string;
   comment?: string;
-  giftId?: number;
+  giftId?: number | string;
   giftName?: string;
   giftCount?: number;
   coinValue?: number;

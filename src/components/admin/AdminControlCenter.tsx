@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   ADMIN_CATEGORIES,
   AdminCategoryId,
+  BulkGiftIdCheckResult,
   DialogueCategory,
   DiscipleStayDurationConfig,
   LiveConnectionStatus,
@@ -58,7 +59,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
   const [newDialogueCat, setNewDialogueCat] = useState<DialogueCategory>('silly_evil_boast');
   const [logFilter, setLogFilter] = useState<string>('ALL');
 
-  // Gift form state
+  // Gift form & Bulk Gift ID Management state
   const [giftNameInput, setGiftNameInput] = useState('');
   const [giftIdsInput, setGiftIdsInput] = useState('');
   const [giftCoinsInput, setGiftCoinsInput] = useState(10);
@@ -66,7 +67,25 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
   const [giftGrantsThrone, setGiftGrantsThrone] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
 
-  // Diệt Môn 1000 Xu Test state
+  // Bulk Gift ID Import state (Section VI)
+  const [bulkTargetGroupId, setBulkTargetGroupId] = useState<string>('gift_tier_1');
+  const [bulkRawInput, setBulkRawInput] = useState<string>('');
+  const [bulkDefaultGiftName, setBulkDefaultGiftName] = useState<string>('');
+  const [bulkOverwriteConflicts, setBulkOverwriteConflicts] = useState<boolean>(false);
+  const [bulkCheckPreview, setBulkCheckPreview] = useState<BulkGiftIdCheckResult | null>(null);
+
+  // Gift Management Table state (Section VII)
+  const [giftTableValueFilter, setGiftTableValueFilter] = useState<number | 'ALL'>('ALL');
+  const [giftTableSearch, setGiftTableSearch] = useState<string>('');
+  const [editingGiftIdKey, setEditingGiftIdKey] = useState<string | null>(null);
+  const [editingGiftNameDraft, setEditingGiftNameDraft] = useState<string>('');
+  const [movingGiftIdKey, setMovingGiftIdKey] = useState<string | null>(null);
+  const [movingTargetGroupId, setMovingTargetGroupId] = useState<string>('gift_tier_5');
+  const [giftImportText, setGiftImportText] = useState<string>('');
+  const [showGiftImportBox, setShowGiftImportBox] = useState<boolean>(false);
+  const [, setGiftRegistryVersion] = useState<number>(0);
+
+  // Diệt Môn 1.000 X Test state
   const [dietMonTestName, setDietMonTestName] = useState('Độc Cô Bá Chủ');
   const [dietMonTestAvatar, setDietMonTestAvatar] = useState('');
 
@@ -105,6 +124,10 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
 
   useEffect(() => {
     return voiceManager.subscribe(setVoiceSnap);
+  }, []);
+
+  useEffect(() => {
+    return giftRegistry.subscribe(() => setGiftRegistryVersion(v => v + 1));
   }, []);
 
   const {
@@ -727,7 +750,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     ⏱️ Quản Lý Đồ Đệ → Thời Gian Hoạt Động (Thời Gian Ở Lại Đại Điện)
                   </div>
                   <div className="text-[11px] text-stone-400">
-                    Mặc định: <strong className="text-amber-300">7 phút (420 giây)</strong> • Chỉ Bình luận & Quà hợp lệ mới làm mới bộ đếm • Giữ nguyên Xu & Cấp bậc khi rời sảnh
+                    Mặc định: <strong className="text-amber-300">7 phút (420 giây)</strong> • Chỉ Bình luận & Quà hợp lệ mới làm mới bộ đếm • Giữ nguyên X & Cấp bậc khi rời sảnh
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -1002,7 +1025,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       Còn lại: <strong>{formatCountdownMMSS(selectedDisciple.remainingStaySec)}</strong>
                     </span>
                     <span className="px-2 py-0.5 rounded bg-purple-950 border border-purple-400/40 text-purple-200 font-bold">
-                      {selectedDisciple.rankName} ({selectedDisciple.totalCoins} xu)
+                      {selectedDisciple.rankName} ({selectedDisciple.totalCoins} X)
                     </span>
                   </div>
                 </div>
@@ -1164,7 +1187,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                             <td className="p-2">
                               <div className="font-semibold text-amber-300">{d.rankName}</div>
                               <div className="text-[10px] text-stone-400 font-mono">
-                                {d.totalCoins} xu ({d.giftCount} quà)
+                                {d.totalCoins} X ({d.giftCount} quà)
                               </div>
                             </td>
                             <td className="p-2 text-stone-200">
@@ -1253,26 +1276,26 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
         )}
 
         {/* ==================================================================
-            6. HỆ THỐNG CẤP BẬC & CỘNG DỒN XU (9 RANKS, ACCUMULATION, LEDGER, HISTORY)
+            6. HỆ THỐNG CẤP BẬC & CỘNG DỒN X (9 RANKS, ACCUMULATION, LEDGER, HISTORY)
            ================================================================== */}
         {activeTab === 'ranks' && (
           <div className="space-y-4">
-            {/* A. CẤU HÌNH QUY TẮC CỘNG DỒN XU & LƯU TRỮ PHIÊN / ĐA PHIÊN */}
+            {/* A. CẤU HÌNH QUY TẮC CỘNG DỒN X & LƯU TRỮ PHIÊN / ĐA PHIÊN */}
             <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/40 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-bold text-amber-400 uppercase">
-                  🎖️ Hệ Thống Cộng Dồn Tổng Xu Thăng Cấp & Chế Độ Lưu Trữ
+                  🎖️ Hệ Thống Cộng Dồn Tổng X Thăng Cấp & Chế Độ Lưu Trữ
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={() => {
                       sectGameManager.resetDemoCoins();
                       liveConnectionManager.emitAdminCommand({ action: 'reset_demo_coins' });
-                      notifySync('Đã đặt lại toàn bộ tổng xu & cấp bậc Demo về 0 (Dân Đen)!');
+                      notifySync('Đã đặt lại toàn bộ tổng X & cấp bậc Demo về 0 (Dân Đen)!');
                     }}
                     className="px-2.5 py-1 rounded bg-red-800 hover:bg-red-700 text-white font-bold cursor-pointer"
                   >
-                    🔄 Đặt Lại Xu Chế Độ Demo (Về 0 Xu)
+                    🔄 Đặt Lại X Chế Độ Demo (Về 0 X)
                   </button>
                   <button
                     onClick={() => {
@@ -1285,11 +1308,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       a.download = `magiao-ranks-ledger-${Date.now()}.json`;
                       a.click();
                       URL.revokeObjectURL(url);
-                      notifySync('Đã tải xuống file sao lưu dữ liệu Cấp Bậc & Sổ Xu!');
+                      notifySync('Đã tải xuống file sao lưu dữ liệu Cấp Bậc & Sổ X!');
                     }}
                     className="px-2.5 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
                   >
-                    ⬇ Sao Lưu Cấp Bậc & Sổ Xu (JSON)
+                    ⬇ Sao Lưu Cấp Bậc & Sổ X (JSON)
                   </button>
                   <button
                     onClick={() => setShowBackupImportBox(v => !v)}
@@ -1302,7 +1325,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       sectGameManager.resetRanksToDefault();
                       updateAndSyncConfig(d => {
                         d.ranks = sectGameManager.getConfig().ranks;
-                      }, 'Đã khôi phục 9 mốc xu mặc định (0 / 1 / 5 / 10 / 20 / 50 / 99 / 199)!');
+                      }, 'Đã khôi phục 8 mốc X mặc định (0 / 1 / 5 / 10 / 20 / 50 / 99 / 199)!');
                     }}
                     className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 cursor-pointer"
                   >
@@ -1333,7 +1356,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                                 action: 'import_rank_ledger',
                                 payload: parsed,
                               });
-                              notifySync('Đã khôi phục thành công dữ liệu Cấp Bậc & Sổ Xu từ file!');
+                              notifySync('Đã khôi phục thành công dữ liệu Cấp Bậc & Sổ X từ file!');
                               setShowBackupImportBox(false);
                             }
                           } catch {
@@ -1363,7 +1386,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                               action: 'import_rank_ledger',
                               payload: parsed,
                             });
-                            notifySync('Đã khôi phục dữ liệu Cấp Bậc & Sổ Xu!');
+                            notifySync('Đã khôi phục dữ liệu Cấp Bậc & Sổ X!');
                             setRankBackupJsonInput('');
                             setShowBackupImportBox(false);
                           }
@@ -1406,10 +1429,10 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                   />
                   <div>
                     <span className="font-bold text-amber-300 block">
-                      Bật Cộng Dồn Tổng Xu Thăng Cấp
+                      Bật Cộng Dồn Tổng X Thăng Cấp
                     </span>
                     <span className="text-[10px] text-stone-400">
-                      Cộng tất cả quà hợp lệ vào tổng xu tích lũy của từng tài khoản TikTok
+                      Cộng tất cả quà hợp lệ vào tổng X tích lũy của từng tài khoản TikTok
                     </span>
                   </div>
                 </label>
@@ -1492,7 +1515,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           uniqueId: uid,
                           nickname: name,
                           coinValue: c,
-                          giftName: `Quà Lẻ ${c} Xu`,
+                          giftName: 'Quà Môn Phái',
                           giftCount: 1,
                           isDemo: true,
                         };
@@ -1500,11 +1523,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
                       onSelectDiscipleId(uid);
-                      notifySync(`Đã thử 1 + 5 + 5 = 11 Xu cho ${name} ➔ Đạt cấp Tinh Anh (Mốc 10 Xu)!`);
+                      notifySync(`Đã thử 1 + 5 + 5 = 11 X cho ${name} ➔ Đạt cấp Tinh Anh (Mốc 10 X)!`);
                     }}
                     className="px-3 py-1.5 rounded bg-indigo-700 hover:bg-indigo-600 text-white font-bold cursor-pointer"
                   >
-                    ⚡ Thử: 1 + 5 + 5 = 11 Xu ➔ Tinh Anh (Mốc 10)
+                    ⚡ Thử: 1 + 5 + 5 = 11 X ➔ Tinh Anh (Mốc 10 X)
                   </button>
 
                   <button
@@ -1521,7 +1544,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           uniqueId: uid,
                           nickname: name,
                           coinValue: c,
-                          giftName: `Lễ Vật ${c} Xu`,
+                          giftName: 'Lễ Vật Ma Giáo',
                           giftCount: 1,
                           isDemo: true,
                         };
@@ -1529,11 +1552,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
                       onSelectDiscipleId(uid);
-                      notifySync(`Đã thử 90 + 10 = 100 Xu cho ${name} ➔ Đạt cấp Đồng Tôn (Mốc 99 Xu)!`);
+                      notifySync(`Đã thử 90 + 10 = 100 X cho ${name} ➔ Đạt cấp Đồng Tôn (Mốc 99 X)!`);
                     }}
                     className="px-3 py-1.5 rounded bg-amber-700 hover:bg-amber-600 text-white font-bold cursor-pointer"
                   >
-                    ⚡ Thử: 90 + 10 = 100 Xu ➔ Đồng Tôn (Mốc 99)
+                    ⚡ Thử: 90 + 10 = 100 X ➔ Đồng Tôn (Mốc 99 X)
                   </button>
 
                   <button
@@ -1550,7 +1573,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           uniqueId: uid,
                           nickname: name,
                           coinValue: c,
-                          giftName: `Bảo Vật ${c} Xu`,
+                          giftName: 'Bảo Vật Ma Giáo',
                           giftCount: 1,
                           isDemo: true,
                         };
@@ -1558,11 +1581,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
                       onSelectDiscipleId(uid);
-                      notifySync(`Đã thử 190 + 10 = 200 Xu cho ${name} ➔ Đạt cấp Giáo Chủ (Mốc 199 Xu)!`);
+                      notifySync(`Đã thử 190 + 10 = 200 X cho ${name} ➔ Đạt cấp Giáo Chủ (Mốc 199 X)!`);
                     }}
                     className="px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold cursor-pointer"
                   >
-                    ⚡ Thử: 190 + 10 = 200 Xu ➔ Giáo Chủ (Mốc 199)
+                    ⚡ Thử: 190 + 10 = 200 X ➔ Giáo Chủ (Mốc 199 X)
                   </button>
 
                   <button
@@ -1579,18 +1602,18 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           uniqueId: uid,
                           nickname: name,
                           coinValue: c,
-                          giftName: `Thánh Vật ${c} Xu`,
+                          giftName: 'Thánh Vật Ma Giáo',
                           giftCount: 1,
                           isDemo: true,
                         };
                         sectGameManager.handleGiftEvent(evt);
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
-                      notifySync(`Đã thử 900 + 100 = 1.000 Xu cho ${name} ➔ Giữ cấp Giáo Chủ & Kích hoạt DIỆT MÔN!`);
+                      notifySync(`Đã thử 900 + 100 = 1.000 X cho ${name} ➔ Giữ cấp Giáo Chủ & Kích hoạt DIỆT MÔN!`);
                     }}
                     className="px-3 py-1.5 rounded bg-red-700 hover:bg-red-600 text-white font-bold cursor-pointer"
                   >
-                    💥 Thử: 900 + 100 = 1.000 Xu ➔ Kích Hoạt DIỆT MÔN
+                    💥 Thử: 900 + 100 = 1.000 X ➔ Kích Hoạt DIỆT MÔN
                   </button>
 
                   <button
@@ -1606,16 +1629,16 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         uniqueId: uid,
                         nickname: name,
                         coinValue: 20,
-                        giftName: 'Bảo Kiếm 20 Xu',
+                        giftName: 'Bảo Kiếm Hộ Pháp',
                         giftCount: 1,
                         isDemo: true,
                       };
                       const r1 = sectGameManager.handleGiftEvent(evt);
                       const r2 = sectGameManager.handleGiftEvent(evt);
                       notifySync(
-                        `Gửi lặp 2 lần cùng ID "${fixedEventId}": Lần 1 (+${r1.addedCoins} xu), Lần 2 bị chặn=${Boolean(
+                        `Gửi lặp 2 lần cùng ID "${fixedEventId}": Lần 1 (+${r1.addedCoins} X), Lần 2 bị chặn=${Boolean(
                           r2.duplicateIgnored
-                        )} (Tổng: ${r2.disciple.totalCoins} xu)!`
+                        )} (Tổng: ${r2.disciple.totalCoins} X)!`
                       );
                     }}
                     className="px-3 py-1.5 rounded bg-teal-800 hover:bg-teal-700 text-white font-bold cursor-pointer"
@@ -1626,7 +1649,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
               </div>
             </div>
 
-            {/* B2. QUẢN TRỊ ĐẠI SỰ KIỆN ĐẶC BIỆT: DIỆT MÔN (1.000 XU) */}
+            {/* B2. QUẢN TRỊ ĐẠI SỰ KIỆN ĐẶC BIỆT: DIỆT MÔN (1.000 X) */}
             <div
               data-testid="admin-diet-mon-panel"
               className="p-3.5 rounded-lg bg-gradient-to-br from-red-950/50 via-stone-900 to-purple-950/40 border border-red-500/50 space-y-3"
@@ -1634,7 +1657,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="font-bold text-red-400 uppercase text-xs flex items-center gap-1.5">
-                    <span>⚡ Đại Sự Kiện Đặc Biệt: MA GIÁO ĐẠI KIẾP – DIỆT MÔN ({config.dietMonConfig?.coinThreshold || 1000} XU)</span>
+                    <span>⚡ Đại Sự Kiện Đặc Biệt: MA GIÁO ĐẠI KIẾP – DIỆT MÔN ({config.dietMonConfig?.coinThreshold || 1000} X)</span>
                     {dietMon.isActive && (
                       <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] animate-pulse">
                         ĐANG DIỄN RA: {dietMon.phase.toUpperCase()}
@@ -1642,7 +1665,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     )}
                   </div>
                   <div className="text-[11px] text-stone-300 mt-0.5">
-                    Người đạt mốc {config.dietMonConfig?.coinThreshold || 1000} xu vẫn giữ cấp <strong>Giáo Chủ</strong> (không tạo cấp bậc thứ 9) và kích hoạt 5 giai đoạn sập đại điện – hố đen cuốn toàn bộ đệ tử – tái thiết đại điện trong {config.dietMonConfig?.durationSec || 15} giây.
+                    Người đạt mốc {config.dietMonConfig?.coinThreshold || 1000} X vẫn giữ cấp <strong>Giáo Chủ</strong> (không tạo cấp bậc thứ 9) và kích hoạt 5 giai đoạn sập đại điện – hố đen cuốn toàn bộ đệ tử – tái thiết đại điện trong {config.dietMonConfig?.durationSec || 15} giây.
                   </div>
                 </div>
 
@@ -1737,7 +1760,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                 </label>
 
                 <label className="flex items-center justify-between gap-2">
-                  <span className="text-stone-300">Mốc Xu Kích Hoạt:</span>
+                  <span className="text-stone-300">Mốc X Kích Hoạt:</span>
                   <input
                     type="number"
                     min={100}
@@ -1918,8 +1941,8 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       >
                         <div>
                           <strong className="text-yellow-300">{item.displayName}</strong>{' '}
-                          <code className="text-[10px] text-stone-400">({item.userId})</code> • Tổng xu:{' '}
-                          <strong className="text-red-400">{item.totalCoins} Xu</strong> • Đã cuốn:{' '}
+                          <code className="text-[10px] text-stone-400">({item.userId})</code> • Tổng X:{' '}
+                          <strong className="text-red-400">{item.totalCoins} X</strong> • Đã cuốn:{' '}
                           <strong className="text-purple-300">{item.suckedDisciplesCount} đệ tử</strong>
                           {item.isTest && (
                             <span className="ml-1.5 px-1.5 py-0.2 rounded bg-purple-900 text-purple-200 text-[9px]">
@@ -1937,10 +1960,10 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
               </div>
             </div>
 
-            {/* C. CHỈNH NGƯỠNG XU CỦA TỪNG CẤP (9 CẤP BẬC) */}
+            {/* C. CHỈNH NGƯỠNG X CỦA TỪNG CẤP (8 CẤP BẬC) */}
             <div className="space-y-2">
               <div className="font-bold text-amber-300 uppercase">
-                ⚙️ Chỉnh Ngưỡng Xu Của Từng Cấp Bậc (Tự Động Đánh Giá Lại Ngay Khi Đổi):
+                ⚙️ Chỉnh Ngưỡng X Của Từng Cấp Bậc (Tự Động Đánh Giá Lại Ngay Khi Đổi):
               </div>
               {config.ranks.map((rank, idx) => (
                 <div
@@ -1959,7 +1982,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="flex items-center gap-1 text-[11px]">
-                        <span>{rank.isThroneRank ? 'Ngưỡng Quà Tối Cao (Xu):' : 'Mốc Tổng Xu:'}</span>
+                        <span>{rank.isThroneRank ? 'Ngưỡng Quà Tối Cao (X):' : 'Mốc Tổng X:'}</span>
                         <input
                           type="number"
                           min={0}
@@ -1987,11 +2010,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
               ))}
             </div>
 
-            {/* D. TRA CỨU TỔNG XU TỪNG NGƯỜI CHƠI THEO TIKTOK USER ID */}
+            {/* D. TRA CỨU TỔNG X TỪNG NGƯỜI CHƠI THEO TIKTOK USER ID */}
             <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/30 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-bold text-amber-400 uppercase">
-                  🔍 Sổ Vàng Tổng Xu Tích Lũy Từng Người ({playerLedger.length} Tài Khoản TikTok)
+                  🔍 Sổ Vàng Tổng X Tích Lũy Từng Người ({playerLedger.length} Tài Khoản TikTok)
                 </div>
                 <input
                   type="text"
@@ -2026,7 +2049,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
 
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/40 text-amber-300 font-mono font-bold">
-                          Tổng: {rec.totalCoins} Xu ({rec.giftCount} quà)
+                          Tổng: {rec.totalCoins} X ({rec.giftCount} quà)
                         </span>
                         {[1, 5, 10].map(addC => (
                           <button
@@ -2040,7 +2063,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                                 uniqueId: rec.uniqueId,
                                 nickname: rec.displayName,
                                 coinValue: addC,
-                                giftName: `Quà +${addC} Xu`,
+                                giftName: 'Lễ Vật Ma Giáo',
                                 giftCount: 1,
                                 isDemo: true,
                               };
@@ -2052,7 +2075,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                             }}
                             className="px-2 py-0.5 rounded bg-emerald-800 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer"
                           >
-                            +{addC} Xu
+                            +{addC} X
                           </button>
                         ))}
                         <button
@@ -2062,11 +2085,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                               action: 'reset_demo_coins',
                               userId: rec.userId,
                             });
-                            notifySync(`Đã đặt lại xu của ${rec.displayName} (${rec.userId}) về 0!`);
+                            notifySync(`Đã đặt lại X của ${rec.displayName} (${rec.userId}) về 0!`);
                           }}
                           className="px-2 py-0.5 rounded bg-red-900/80 hover:bg-red-800 text-red-200 text-[10px] font-bold cursor-pointer"
                         >
-                          Về 0 Xu
+                          Về 0 X
                         </button>
                       </div>
                     </div>
@@ -2095,8 +2118,8 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           <code className="text-[10px] text-stone-400">({gh.userId})</code> tặng{' '}
                           <span className="text-emerald-300 font-semibold">{gh.giftName}</span>
                           <div className="text-[10px] text-stone-400 font-mono">
-                            Xu: {gh.totalCoinsBefore} + {gh.addedCoins} ={' '}
-                            <strong className="text-amber-300">{gh.totalCoinsAfter} Xu</strong> • Cấp:{' '}
+                            X: {gh.totalCoinsBefore} + {gh.addedCoins} ={' '}
+                            <strong className="text-amber-300">{gh.totalCoinsAfter} X</strong> • Cấp:{' '}
                             <span className={gh.promoted ? 'text-yellow-300 font-bold' : 'text-stone-300'}>
                               {gh.oldRankName} ➔ {gh.newRankName}
                             </span>
@@ -2131,7 +2154,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           <div className="text-[10px] text-stone-300">
                             Thăng từ <span className="text-stone-400">{pr.oldRankName}</span> lên{' '}
                             <strong className="text-yellow-300">{pr.newRankName}</strong> (Tổng:{' '}
-                            <strong className="text-emerald-300">{pr.coinValue} Xu</strong> • Quà: {pr.giftName})
+                            <strong className="text-emerald-300">{pr.coinValue} X</strong> • Quà: {pr.giftName})
                           </div>
                         </div>
                         <span className="text-[10px] text-stone-500 shrink-0">
@@ -2147,14 +2170,14 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
         )}
 
         {/* ==================================================================
-            7. QUẢN LÝ QUÀ TIKTOK (GIFT REGISTRY CRUD, MULTI-ID, JSON IMPORT/EXPORT)
+            7. QUẢN LÝ QUÀ TIKTOK (MULTI-ID PER GROUP, BULK PASTE, TABLE, CSV/JSON)
            ================================================================== */}
         {activeTab === 'tiktok_gifts' && (
           <div className="space-y-4">
             {/* Quick Accumulation Status Bar inside Tab 7 */}
             <div className="p-2.5 rounded-lg bg-stone-900 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[11px] text-stone-200">
-                💰 Chế độ Cộng Dồn Tổng Xu:{' '}
+                💰 Chế độ Cộng Dồn Tổng X:{' '}
                 <strong className="text-emerald-400">
                   {config.rankAccumulation?.enabled !== false ? 'ĐANG BẬT (Cộng dồn nhiều lần tặng)' : 'ĐANG TẮT'}
                 </strong>{' '}
@@ -2165,30 +2188,232 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     : 'Theo phiên LIVE hiện tại (Session)'}
                 </strong>
               </div>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => {
                     sectGameManager.resetDemoCoins();
                     liveConnectionManager.emitAdminCommand({ action: 'reset_demo_coins' });
-                    notifySync('Đã đặt lại xu chế độ Demo về 0!');
+                    notifySync('Đã đặt lại X chế độ Demo về 0!');
                   }}
                   className="px-2.5 py-1 rounded bg-red-800 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
                 >
-                  🔄 Đặt Lại Xu Demo Về 0
+                  🔄 Đặt Lại X Demo Về 0
                 </button>
                 <button
                   onClick={() => setActiveTab('ranks')}
                   className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-black text-[11px] font-bold cursor-pointer"
                 >
-                  🎖️ Xem Sổ Xu & Lịch Sử Thăng Cấp
+                  🎖️ Xem Sổ X & Lịch Sử Thăng Cấp
                 </button>
               </div>
             </div>
 
-            {/* Create New Gift Mapping */}
+            {/* A. CHỨC NĂNG THÊM DANH SÁCH ID QUÀ HÀNG LOẠT (SECTION VI) */}
+            <div
+              data-testid="panel-bulk-gift-ids"
+              className="p-3.5 rounded-lg bg-stone-900 border border-purple-500/40 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-purple-300 uppercase text-xs sm:text-sm">
+                    📦 Thêm Danh Sách ID Quà TikTok Hàng Loạt Theo Nhóm Giá Trị X
+                  </div>
+                  <div className="text-[11px] text-stone-400">
+                    Hỗ trợ dán 10–100+ ID quà TikTok cùng lúc (ngăn cách bằng dấu phẩy, chấm phẩy, khoảng trắng hoặc xuống dòng). Một ID quà không thể thuộc 2 nhóm giá trị khác nhau.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: 'gift_tier_1', label: 'NHÓM 1 X' },
+                    { id: 'gift_tier_5', label: 'NHÓM 5 X' },
+                    { id: 'gift_tier_10', label: 'NHÓM 10 X' },
+                    { id: 'gift_tier_20', label: 'NHÓM 20 X' },
+                    { id: 'gift_tier_50', label: 'NHÓM 50 X' },
+                    { id: 'gift_tier_99', label: 'NHÓM 99 X' },
+                    { id: 'gift_tier_199', label: 'NHÓM 199 X' },
+                    { id: 'gift_tier_supreme', label: 'NHÓM 1.000 X' },
+                  ].map(preset => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setBulkTargetGroupId(preset.id);
+                        setBulkCheckPreview(null);
+                      }}
+                      className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition ${
+                        bulkTargetGroupId === preset.id
+                          ? 'bg-purple-600 text-white border border-amber-300 shadow'
+                          : 'bg-stone-950 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <label className="block text-[11px]">
+                  <span className="text-stone-400 block mb-1">Chọn nhóm giá trị đích:</span>
+                  <select
+                    data-testid="select-bulk-gift-group"
+                    value={bulkTargetGroupId}
+                    onChange={e => {
+                      setBulkTargetGroupId(e.target.value);
+                      setBulkCheckPreview(null);
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 text-amber-300 font-bold"
+                  >
+                    {giftRegistry.getAll().map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.groupName || `NHÓM ${g.coinValue} X`} — {g.giftName} ({g.coinValue.toLocaleString('vi-VN')} X)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block text-[11px]">
+                  <span className="text-stone-400 block mb-1">Tên quà mặc định cho các ID mới (tùy chọn):</span>
+                  <input
+                    type="text"
+                    value={bulkDefaultGiftName}
+                    onChange={e => setBulkDefaultGiftName(e.target.value)}
+                    placeholder="Để trống sẽ dùng tên nhóm quà"
+                    className="w-full px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 text-stone-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2 pt-5 cursor-pointer text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={bulkOverwriteConflicts}
+                    onChange={e => setBulkOverwriteConflicts(e.target.checked)}
+                  />
+                  <span className="text-amber-200 font-semibold">
+                    Chuyển luôn ID sang nhóm này nếu đang nằm ở nhóm giá trị khác
+                  </span>
+                </label>
+              </div>
+
+              <textarea
+                data-testid="textarea-bulk-gift-ids"
+                rows={3}
+                value={bulkRawInput}
+                onChange={e => {
+                  setBulkRawInput(e.target.value);
+                  setBulkCheckPreview(null);
+                }}
+                placeholder="Dán danh sách Gift ID TikTok vào đây (VD: 5655, 6064, 7123, 8891 hoặc mỗi ID một dòng)..."
+                className="w-full p-2.5 rounded bg-stone-950 border border-stone-700 font-mono text-xs text-amber-100"
+              />
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    data-testid="btn-inspect-bulk-gift-ids"
+                    type="button"
+                    onClick={() => {
+                      const check = giftRegistry.inspectBulkGiftIds(bulkRawInput, bulkTargetGroupId);
+                      setBulkCheckPreview(check);
+                    }}
+                    className="px-3.5 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold cursor-pointer shadow"
+                  >
+                    🔍 THÊM DANH SÁCH (Kiểm Tra Trước Khi Lưu)
+                  </button>
+
+                  {bulkCheckPreview && (
+                    <button
+                      data-testid="btn-confirm-save-bulk-gift-ids"
+                      type="button"
+                      onClick={async () => {
+                        if (bulkOverwriteConflicts && bulkCheckPreview.conflictOtherGroups.length > 0) {
+                          for (const c of bulkCheckPreview.conflictOtherGroups) {
+                            await giftRegistry.moveGiftIdBetweenGroups(c.giftId, c.groupId, bulkTargetGroupId);
+                          }
+                        }
+                        const res = await giftRegistry.bulkAddIdsToGroup(
+                          bulkTargetGroupId,
+                          bulkRawInput,
+                          bulkDefaultGiftName.trim() || undefined
+                        );
+                        if (!res.ok && !(bulkOverwriteConflicts && bulkCheckPreview.conflictOtherGroups.length > 0)) {
+                          setGiftError(res.error || 'Lỗi lưu danh sách ID quà');
+                        } else {
+                          setGiftError(null);
+                          setBulkRawInput('');
+                          setBulkCheckPreview(null);
+                          notifySync(
+                            `✓ Đã lưu thêm ${res.addedCount + (bulkOverwriteConflicts ? bulkCheckPreview.conflictOtherGroups.length : 0)} ID quà vào nhóm!`
+                          );
+                        }
+                      }}
+                      className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold cursor-pointer shadow"
+                    >
+                      💾 XÁC NHẬN LƯU ({bulkCheckPreview.validNewIds.length + (bulkOverwriteConflicts ? bulkCheckPreview.conflictOtherGroups.length : 0)} ID)
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sample20 = Array.from({ length: 20 }, (_, i) => String(11001 + i)).join(', ');
+                    setBulkTargetGroupId('gift_tier_1');
+                    setBulkRawInput(sample20);
+                    setBulkCheckPreview(giftRegistry.inspectBulkGiftIds(sample20, 'gift_tier_1'));
+                  }}
+                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-[11px] font-semibold cursor-pointer"
+                >
+                  ⚡ Điền Mẫu 20 ID Nhóm 1 X Để Test
+                </button>
+              </div>
+
+              {bulkCheckPreview && (
+                <div
+                  data-testid="bulk-gift-preview-box"
+                  className="p-3 rounded bg-stone-950 border border-purple-500/50 space-y-1.5 text-[11px]"
+                >
+                  <div className="font-bold text-amber-300">
+                    📋 Kết Quả Kiểm Tra Danh Sách ID Trước Khi Lưu:
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono">
+                    <div className="p-1.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300">
+                      Hợp lệ mới: <strong>{bulkCheckPreview.validNewIds.length}</strong>
+                    </div>
+                    <div className="p-1.5 rounded bg-stone-900 border border-stone-700 text-stone-300">
+                      Trùng trong lần nhập: <strong>{bulkCheckPreview.duplicateInBatchIds.length}</strong>
+                    </div>
+                    <div className="p-1.5 rounded bg-sky-950/70 border border-sky-500/40 text-sky-300">
+                      Đã có trong nhóm: <strong>{bulkCheckPreview.alreadyInSameGroupIds.length}</strong>
+                    </div>
+                    <div className="p-1.5 rounded bg-amber-950/70 border border-amber-500/40 text-amber-300">
+                      Xung đột nhóm khác: <strong>{bulkCheckPreview.conflictOtherGroups.length}</strong>
+                    </div>
+                    <div className="p-1.5 rounded bg-red-950/70 border border-red-500/40 text-red-300">
+                      ID lỗi định dạng: <strong>{bulkCheckPreview.invalidTokens.length}</strong>
+                    </div>
+                  </div>
+                  {bulkCheckPreview.conflictOtherGroups.length > 0 && (
+                    <div className="text-amber-300 font-semibold">
+                      ⚠️ Cảnh báo xung đột nhóm:{' '}
+                      {bulkCheckPreview.conflictOtherGroups
+                        .map(c => `ID ${c.giftId} đang thuộc ${c.groupName} (${c.coinValue} X)`)
+                        .join(' • ')}
+                    </div>
+                  )}
+                  {bulkCheckPreview.invalidTokens.length > 0 && (
+                    <div className="text-red-300">
+                      ❌ Các chuỗi không phải ID số hợp lệ: [{bulkCheckPreview.invalidTokens.join(', ')}]
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* B. THÊM NHÓM GIÁ TRỊ QUÀ MỚI / QUÀ LẺ NGOÀI MỐC (2 X, 3 X, 30 X, 100 X, 299 X, 500 X...) */}
             <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/30 space-y-2.5">
               <div className="font-bold text-amber-400 uppercase">
-                🎁 Thêm / Ánh Xạ Quà TikTok Mới (Hỗ trợ nhiều Gift ID)
+                🎁 Tạo Nhóm Giá Trị Quà Mới Hoặc Quà Ngoài Mốc (VD: 2 X, 3 X, 30 X, 100 X, 299 X, 500 X)
               </div>
               {giftError && (
                 <div className="p-2 rounded bg-red-950 border border-red-500 text-red-200 text-[11px]">
@@ -2200,7 +2425,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                   type="text"
                   value={giftNameInput}
                   onChange={e => setGiftNameInput(e.target.value)}
-                  placeholder="Tên quà (VD: Hoa Hồng Đỏ)"
+                  placeholder="Tên quà / nhóm quà (VD: Quà Lẻ 3 X)"
                   className="px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700"
                 />
                 <input
@@ -2215,7 +2440,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                   min={1}
                   value={giftCoinsInput}
                   onChange={e => setGiftCoinsInput(Number(e.target.value))}
-                  placeholder="Số Xu"
+                  placeholder="Giá trị X"
                   className="px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 font-mono"
                 />
                 <select
@@ -2238,20 +2463,22 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     onChange={e => setGiftGrantsThrone(e.target.checked)}
                   />
                   <span className="text-amber-300 font-semibold">
-                    🐉 Quà Chí Tôn (Tặng quà này lập tức đoạt Ngai Vàng làm Tân Giáo Chủ)
+                    🐉 Quà Chí Tôn (Tặng quà này lập tức đoạt Ngai Vàng làm Giáo Chủ)
                   </span>
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={async () => {
                       setGiftError(null);
                       const parsedIds = giftIdsInput
-                        .split(',')
-                        .map(s => Number(s.trim()))
-                        .filter(n => Number.isInteger(n) && n > 0);
+                        .split(/[\n,;|\s]+/)
+                        .map(s => s.trim())
+                        .filter(Boolean);
                       const res = await giftRegistry.createGift({
-                        giftName: giftNameInput,
+                        giftName: giftNameInput || `Nhóm Quà ${giftCoinsInput} X`,
+                        groupName: `NHÓM ${giftCoinsInput.toLocaleString('vi-VN')} X`,
                         giftIds: parsedIds,
+                        giftIdStrings: parsedIds,
                         coinValue: giftCoinsInput,
                         rankGranted: giftGrantsThrone ? 'giao_chu' : giftRankInput,
                         grantsThrone: giftGrantsThrone || giftCoinsInput >= 199,
@@ -2262,21 +2489,51 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       } else {
                         setGiftNameInput('');
                         setGiftIdsInput('');
-                        notifySync('Đã thêm cấu hình quà TikTok!');
+                        notifySync('Đã thêm nhóm quà TikTok mới!');
                       }
                     }}
                     className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
                   >
-                    + Thêm Quà
+                    + Thêm Nhóm / Quà Mới
                   </button>
-                  <a
-                    href="/api/gifts/export"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 font-semibold"
+                  <button
+                    onClick={() => {
+                      const jsonStr = giftRegistry.exportJson();
+                      const blob = new Blob([jsonStr], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `magiao-gifts-${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      notifySync('Đã xuất danh sách quà ra file JSON!');
+                    }}
+                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 font-semibold cursor-pointer"
                   >
                     ⬇ Xuất JSON
-                  </a>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const csvStr = giftRegistry.exportCsv();
+                      const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `magiao-gifts-${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      notifySync('Đã xuất danh sách quà ra file CSV!');
+                    }}
+                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-emerald-300 border border-emerald-500/30 font-semibold cursor-pointer"
+                  >
+                    ⬇ Xuất CSV
+                  </button>
+                  <button
+                    onClick={() => setShowGiftImportBox(v => !v)}
+                    className="px-3 py-1.5 rounded bg-sky-800 hover:bg-sky-700 text-white font-semibold cursor-pointer"
+                  >
+                    ⬆ Nhập JSON / CSV
+                  </button>
                   <button
                     onClick={async () => {
                       await giftRegistry.resetToDefaults();
@@ -2288,69 +2545,297 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                   </button>
                 </div>
               </div>
-            </div>
 
-            {/* Active Gift Mappings List */}
-            <div className="space-y-2">
-              {giftRegistry.getAll().map(g => (
-                <div
-                  key={g.id}
-                  className="p-2.5 rounded-lg bg-stone-900/90 border border-stone-800 flex flex-wrap items-center justify-between gap-2"
-                >
-                  <div>
-                    <div className="font-bold text-amber-300">
-                      {g.icon} {g.giftName} — <span className="text-emerald-400 font-mono">{g.coinValue} Xu</span>
-                      {g.grantsThrone && (
-                        <span className="ml-2 px-1.5 py-0.5 rounded bg-red-800 text-yellow-200 text-[10px]">
-                          ĐOẠT NGAI GIÁO CHỦ
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-stone-400 font-mono">
-                      Gift IDs: [{g.giftIds.join(', ')}] • Phong: {g.rankGranted} • Hiệu ứng: {g.inGameEffect}
-                    </div>
+              {showGiftImportBox && (
+                <div className="p-2.5 rounded bg-stone-950 border border-sky-500/40 space-y-2">
+                  <div className="text-sky-300 font-semibold text-[11px]">
+                    Dán nội dung JSON hoặc CSV (`giftId,giftName,coinValue,groupName,enabled`) để nhập:
                   </div>
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => {
-                        const evt: TikTokLiveEvent = {
-                          id: `test_gift_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                          type: 'gift',
-                          timestamp: Date.now(),
-                          userId: selectedDisciple?.userId || 'demo_gifter_01',
-                          uniqueId: selectedDisciple?.uniqueId || 'demo_gifter_01',
-                          nickname: selectedDisciple?.displayName || 'Lệnh Hồ Xung',
-                          giftId: g.giftIds[0],
-                          giftName: g.giftName,
-                          giftCount: 1,
-                          coinValue: g.coinValue,
-                          isDemo: true,
-                        };
-                        const res = sectGameManager.handleGiftEvent(evt);
-                        liveConnectionManager.emitAdminCommand({
-                          action: 'test_live_event',
-                          event: evt,
-                        });
-                        notifySync(
-                          `${res.disciple.displayName}: +${g.coinValue} xu ➔ Tổng ${res.disciple.totalCoins} xu (${res.newRankName})`
-                        );
-                      }}
-                      className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold cursor-pointer"
-                    >
-                      🎁 Bắn Thử (+{g.coinValue} Xu)
-                    </button>
+                  <textarea
+                    rows={3}
+                    value={giftImportText}
+                    onChange={e => setGiftImportText(e.target.value)}
+                    placeholder="Dán JSON hoặc CSV vào đây..."
+                    className="w-full p-2 rounded bg-stone-900 border border-stone-700 font-mono text-[10px]"
+                  />
+                  <div className="flex gap-2">
                     <button
                       onClick={async () => {
-                        await giftRegistry.deleteGift(g.id);
-                        notifySync(`Đã xóa quà ${g.giftName}`);
+                        const raw = giftImportText.trim();
+                        if (!raw) return;
+                        const res = raw.startsWith('[') || raw.startsWith('{')
+                          ? await giftRegistry.importJson(raw)
+                          : await giftRegistry.importCsv(raw);
+                        if (!res.ok) {
+                          setGiftError(res.error || 'Lỗi nhập dữ liệu quà');
+                        } else {
+                          setGiftError(null);
+                          setGiftImportText('');
+                          setShowGiftImportBox(false);
+                          notifySync('Đã nhập danh sách quà thành công!');
+                        }
                       }}
-                      className="px-2 py-1 rounded bg-red-900/70 hover:bg-red-800 text-red-200 cursor-pointer"
+                      className="px-3 py-1 rounded bg-sky-600 text-white font-bold cursor-pointer"
                     >
-                      Xóa
+                      ✓ Xác Nhận Nhập
+                    </button>
+                    <button
+                      onClick={() => setShowGiftImportBox(false)}
+                      className="px-3 py-1 rounded bg-stone-800 text-stone-300 cursor-pointer"
+                    >
+                      Đóng
                     </button>
                   </div>
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* C. BẢNG QUẢN LÝ QUÀ TRONG ADMIN (SECTION VII) */}
+            <div
+              data-testid="panel-gift-management-table"
+              className="p-3.5 rounded-lg bg-stone-900 border border-amber-500/30 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-bold text-amber-400 uppercase text-xs sm:text-sm">
+                  📋 Bảng Quản Lý Quà TikTok Theo Từng ID ({giftRegistry.getFlattenedGiftItems().length} ID Quà)
+                </div>
+                <input
+                  data-testid="input-search-gift-table"
+                  type="text"
+                  value={giftTableSearch}
+                  onChange={e => setGiftTableSearch(e.target.value)}
+                  placeholder="🔍 Tìm theo ID TikTok hoặc Tên quà..."
+                  className="w-64 px-2.5 py-1 rounded bg-stone-950 border border-stone-700 text-stone-100 text-xs"
+                />
+              </div>
+
+              {/* Bộ lọc nhanh: TẤT CẢ | 1 X | 5 X | 10 X | 20 X | 50 X | 99 X | 199 X | 1.000 X */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-stone-400 mr-1">Lọc nhanh:</span>
+                {(
+                  [
+                    { val: 'ALL', label: 'TẤT CẢ' },
+                    { val: 1, label: '1 X' },
+                    { val: 5, label: '5 X' },
+                    { val: 10, label: '10 X' },
+                    { val: 20, label: '20 X' },
+                    { val: 50, label: '50 X' },
+                    { val: 99, label: '99 X' },
+                    { val: 199, label: '199 X' },
+                    { val: 1000, label: '1.000 X' },
+                  ] as const
+                ).map(f => (
+                  <button
+                    key={String(f.val)}
+                    type="button"
+                    onClick={() => setGiftTableValueFilter(f.val)}
+                    className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition ${
+                      giftTableValueFilter === f.val
+                        ? 'bg-amber-500 text-black shadow'
+                        : 'bg-stone-950 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Bảng: ID TikTok | Tên quà | Giá trị | Trạng thái | Thao tác */}
+              <div className="max-h-[380px] overflow-x-auto overflow-y-auto rounded border border-stone-800">
+                <table className="w-full text-left border-collapse text-[11px] tabular-nums">
+                  <thead className="bg-stone-950 text-stone-400 sticky top-0 z-10 border-b border-stone-800">
+                    <tr>
+                      <th className="p-2">ID TikTok</th>
+                      <th className="p-2">Tên quà</th>
+                      <th className="p-2">Giá trị</th>
+                      <th className="p-2">Trạng thái</th>
+                      <th className="p-2 text-right">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-800/70">
+                    {giftRegistry
+                      .getFlattenedGiftItems()
+                      .filter(row => {
+                        if (giftTableValueFilter !== 'ALL' && row.coinValue !== giftTableValueFilter) {
+                          return false;
+                        }
+                        if (giftTableSearch.trim()) {
+                          const q = giftTableSearch.trim().toLowerCase();
+                          return (
+                            row.giftId.toLowerCase().includes(q) ||
+                            row.giftName.toLowerCase().includes(q) ||
+                            row.groupName.toLowerCase().includes(q)
+                          );
+                        }
+                        return true;
+                      })
+                      .map(row => {
+                        const rowKey = `${row.groupId}:${row.giftId}`;
+                        const isEditing = editingGiftIdKey === rowKey;
+                        const isMoving = movingGiftIdKey === rowKey;
+
+                        return (
+                          <tr key={rowKey} className="bg-stone-900/70 hover:bg-stone-800/70">
+                            <td className="p-2 font-mono font-bold text-amber-300">
+                              <code>{row.giftId}</code>
+                            </td>
+                            <td className="p-2">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={editingGiftNameDraft}
+                                    onChange={e => setEditingGiftNameDraft(e.target.value)}
+                                    className="px-2 py-0.5 rounded bg-stone-950 border border-amber-500 text-stone-100 text-xs"
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      await giftRegistry.updateGiftItemMetadata(row.groupId, row.giftId, {
+                                        giftName: editingGiftNameDraft.trim() || row.giftName,
+                                      });
+                                      setEditingGiftIdKey(null);
+                                      notifySync(`Đã cập nhật tên quà cho ID ${row.giftId}!`);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-emerald-700 text-white font-bold cursor-pointer"
+                                  >
+                                    Lưu
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingGiftIdKey(null)}
+                                    className="px-2 py-0.5 rounded bg-stone-700 text-stone-200 cursor-pointer"
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="font-semibold text-stone-100">{row.giftName}</span>
+                                  <span className="ml-2 text-[10px] text-stone-400">({row.groupName})</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2 font-mono font-bold text-emerald-400">
+                              {row.coinValue.toLocaleString('vi-VN')} X
+                            </td>
+                            <td className="p-2">
+                              <button
+                                onClick={async () => {
+                                  await giftRegistry.updateGiftItemMetadata(row.groupId, row.giftId, {
+                                    enabled: !row.enabled,
+                                  });
+                                  notifySync(
+                                    `Đã ${!row.enabled ? 'BẬT' : 'TẮT'} ID quà ${row.giftId}!`
+                                  );
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                  row.enabled
+                                    ? 'bg-emerald-950 border border-emerald-500/40 text-emerald-300'
+                                    : 'bg-stone-800 border border-stone-600 text-stone-400'
+                                }`}
+                              >
+                                {row.enabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                              </button>
+                            </td>
+                            <td className="p-2 text-right">
+                              <div className="flex flex-wrap items-center justify-end gap-1">
+                                <button
+                                  onClick={() => {
+                                    const evt: TikTokLiveEvent = {
+                                      id: `test_id_${row.giftId}_${Date.now()}`,
+                                      type: 'gift',
+                                      timestamp: Date.now(),
+                                      userId: selectedDisciple?.userId || 'demo_gifter_01',
+                                      uniqueId: selectedDisciple?.uniqueId || 'demo_gifter_01',
+                                      nickname: selectedDisciple?.displayName || 'Lệnh Hồ Xung',
+                                      giftId: row.giftId,
+                                      giftName: row.giftName,
+                                      giftCount: 1,
+                                      coinValue: row.coinValue,
+                                      isDemo: true,
+                                    };
+                                    const res = sectGameManager.handleGiftEvent(evt);
+                                    liveConnectionManager.emitAdminCommand({
+                                      action: 'test_live_event',
+                                      event: evt,
+                                    });
+                                    notifySync(
+                                      `Test ID ${row.giftId} (${row.giftName}) ➔ ${res.disciple.displayName}: +${res.addedCoins} X (Tổng: ${res.disciple.totalCoins} X • ${res.newRankName})`
+                                    );
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold cursor-pointer"
+                                >
+                                  Test
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingGiftIdKey(rowKey);
+                                    setEditingGiftNameDraft(row.giftName);
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 cursor-pointer"
+                                >
+                                  Sửa
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setMovingGiftIdKey(isMoving ? null : rowKey);
+                                    const otherGroup = giftRegistry.getAll().find(g => g.id !== row.groupId);
+                                    if (otherGroup) setMovingTargetGroupId(otherGroup.id);
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 cursor-pointer"
+                                >
+                                  Chuyển Nhóm
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    await giftRegistry.removeGiftIdFromGroup(row.groupId, row.giftId);
+                                    notifySync(`Đã xóa ID ${row.giftId} khỏi ${row.groupName}!`);
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-red-900/80 hover:bg-red-800 text-red-200 cursor-pointer"
+                                >
+                                  Xóa
+                                </button>
+                              </div>
+                              {isMoving && (
+                                <div className="mt-1.5 flex items-center justify-end gap-1">
+                                  <select
+                                    value={movingTargetGroupId}
+                                    onChange={e => setMovingTargetGroupId(e.target.value)}
+                                    className="px-2 py-0.5 rounded bg-stone-950 border border-purple-500 text-amber-200 text-[10px]"
+                                  >
+                                    {giftRegistry
+                                      .getAll()
+                                      .filter(g => g.id !== row.groupId)
+                                      .map(g => (
+                                        <option key={g.id} value={g.id}>
+                                          {g.groupName || `NHÓM ${g.coinValue} X`} ({g.coinValue} X)
+                                        </option>
+                                      ))}
+                                  </select>
+                                  <button
+                                    onClick={async () => {
+                                      const res = await giftRegistry.moveGiftIdBetweenGroups(
+                                        row.giftId,
+                                        row.groupId,
+                                        movingTargetGroupId
+                                      );
+                                      if (res.ok) {
+                                        setMovingGiftIdKey(null);
+                                        notifySync(`Đã chuyển ID ${row.giftId} sang nhóm mới!`);
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-purple-600 text-white font-bold cursor-pointer"
+                                  >
+                                    Xác Nhận Chuyển
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -4494,7 +4979,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
               </div>
 
               <div>
-                <div className="text-stone-400 mb-1.5">2. Giả lập tặng quà thăng cấp (1 ➔ 199 Xu & Đoạt Ngai):</div>
+                <div className="text-stone-400 mb-1.5">2. Giả lập tặng quà thăng cấp (1 ➔ 199 X & Đoạt Ngai):</div>
                 <div className="flex flex-wrap gap-2">
                   {[1, 5, 10, 20, 50, 99, 199].map(coin => (
                     <button
@@ -4506,9 +4991,9 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           timestamp: Date.now(),
                           userId: selectedDisciple?.userId || `hero_${coin}`,
                           uniqueId: selectedDisciple?.uniqueId || `hero_${coin}`,
-                          nickname: selectedDisciple?.displayName || `Cao Thủ ${coin} Xu`,
+                          nickname: selectedDisciple?.displayName || `Cao Thủ ${coin} X`,
                           coinValue: coin,
-                          giftName: `Bảo Vật ${coin} Xu`,
+                          giftName: 'Bảo Vật Ma Giáo',
                           giftCount: 1,
                           isDemo: true,
                         };
@@ -4520,7 +5005,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       }}
                       className="px-2.5 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold cursor-pointer"
                     >
-                      🎁 Tặng {coin} Xu
+                      🎁 Tặng {coin} X
                     </button>
                   ))}
                   <button
@@ -4681,17 +5166,17 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                 </div>
               </div>
 
-              {/* 3. Kịch bản kiểm thử tự động: Rời sảnh rồi bình luận quay lại vẫn giữ nguyên Cấp Bậc & Tổng Xu */}
+              {/* 3. Kịch bản kiểm thử tự động: Rời sảnh rồi bình luận quay lại vẫn giữ nguyên Cấp Bậc & Tổng X */}
               <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-2">
                 <div className="text-emerald-300 font-bold text-[11px]">
-                  3. Kiểm thử kịch bản thực tế (Làm mới bộ đếm • Tự múa không kéo dài giờ • Rời sảnh quay lại giữ nguyên Cấp Bậc & Xu):
+                  3. Kiểm thử kịch bản thực tế (Làm mới bộ đếm • Tự múa không kéo dài giờ • Rời sảnh quay lại giữ nguyên Cấp Bậc & X):
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => {
                       const uid = 'test_return_hero';
                       const name = 'Trương Vô Kỵ';
-                      // Bước 1: Tạo User & tặng 50 xu lên Hộ Pháp Ma Giáo
+                      // Bước 1: Tạo User & tặng 50 X lên Trưởng Lão
                       sectGameManager.handleCommentEvent({
                         id: `ret_c1_${Date.now()}`,
                         type: 'comment',
@@ -4710,7 +5195,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         uniqueId: uid,
                         nickname: name,
                         coinValue: 50,
-                        giftName: 'Hộ Pháp Lệnh',
+                        giftName: 'Trưởng Lão Lệnh',
                         giftCount: 1,
                         isDemo: true,
                       });
@@ -4719,7 +5204,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       sectGameManager.setStayDurationConfig({ walkToGateOnDepart: false });
                       sectGameManager.simulateTimeElapsed(9999, uid);
                       sectGameManager.setStayDurationConfig({ walkToGateOnDepart: prevWalk ?? true });
-                      // Bước 3: Bình luận quay lại sảnh -> Kiểm tra giữ nguyên 50 xu & Hộ Pháp Ma Giáo
+                      // Bước 3: Bình luận quay lại sảnh -> Kiểm tra giữ nguyên 50 X & Trưởng Lão
                       const res = sectGameManager.handleCommentEvent({
                         id: `ret_c2_${Date.now() + 1}`,
                         type: 'comment',
@@ -4732,12 +5217,12 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                       });
                       onSelectDiscipleId(uid);
                       notifySync(
-                        `✓ Kịch bản hoàn tất: ${name} rời sảnh rồi bình luận quay lại vẫn giữ nguyên ${res.disciple?.totalCoins} xu & chức danh [${res.disciple?.rankName}]!`
+                        `✓ Kịch bản hoàn tất: ${name} rời sảnh rồi bình luận quay lại vẫn giữ nguyên ${res.disciple?.totalCoins} X & chức danh [${res.disciple?.rankName}]!`
                       );
                     }}
                     className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
                   >
-                    🔄 Test Rời Sảnh Rồi Quay Lại Giữ Nguyên 50 Xu & Chức Danh
+                    🔄 Test Rời Sảnh Rồi Quay Lại Giữ Nguyên 50 X & Chức Danh
                   </button>
 
                   <button

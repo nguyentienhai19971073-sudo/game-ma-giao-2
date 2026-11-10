@@ -317,7 +317,7 @@ export class SectGameManager {
       xMax: Math.max(74, Math.min(94, thronePos.x + 38)),
       yMin: Math.max(12, thronePos.y),
       yMax: Math.min(44, thronePos.y + 7),
-      label: 'Đài Đồng Tôn Giáo Chủ (199 Xu)',
+      label: 'Đài Đồng Tôn (99 X)',
     };
 
     voiceManager.updateConfig(this.config.voiceConfig);
@@ -1021,7 +1021,7 @@ export class SectGameManager {
             ? `${disciple.displayName} tái xuất Đại Điện [${disciple.rankName}]`
             : `Tân đệ tử nhập môn: ${disciple.displayName}`,
           hadSavedLedger
-            ? `Khôi phục ${disciple.totalCoins} xu & cấp ${disciple.rankName}, đi từ Cổng vào Đại Điện: "${bubbleText || 'Chào Giáo Chủ'}"`
+            ? `Khôi phục ${disciple.totalCoins} X & cấp ${disciple.rankName}, đi từ Cổng vào Đại Điện: "${bubbleText || 'Chào Giáo Chủ'}"`
             : `Bình luận đầu tiên: "${bubbleText || 'Chào Giáo Chủ'}"`
         );
 
@@ -1515,7 +1515,7 @@ export class SectGameManager {
       this.addLog(
         'gift',
         `Bỏ qua sự kiện quà trùng lặp (${eventId})`,
-        `Người chơi: ${existing.displayName} — Tổng xu giữ nguyên: ${existing.totalCoins} xu.`
+        `Người chơi: ${existing.displayName} — Tổng X giữ nguyên: ${existing.totalCoins} X.`
       );
       return {
         disciple: existing,
@@ -1592,8 +1592,12 @@ export class SectGameManager {
       disciple.isSweepingPenalty = false;
     }
 
-    const hasExplicitGiftId = typeof event.giftId === 'number' && event.giftId > 0;
-    const { matched, isUnknown } = giftRegistry.resolveGift({
+    const rawGiftIdStr =
+      event.giftId !== undefined && event.giftId !== null
+        ? String(event.giftId).trim().replace(/^0+/, '')
+        : '';
+    const hasExplicitGiftId = rawGiftIdStr !== '' && /^\d+$/.test(rawGiftIdStr);
+    const { matched, resolvedGiftName, isUnknown } = giftRegistry.resolveGift({
       giftId: event.giftId,
       giftName: event.giftName,
       coinValue: event.coinValue,
@@ -1602,8 +1606,7 @@ export class SectGameManager {
     const matchedById =
       hasExplicitGiftId &&
       matched !== null &&
-      ((Array.isArray(matched.giftIds) && matched.giftIds.includes(event.giftId!)) ||
-        matched.giftId === event.giftId);
+      giftRegistry.getGroupGiftIdStrings(matched).includes(rawGiftIdStr);
 
     let addedCoins = 0;
     if (typeof event.unitCoinValue === 'number' && event.unitCoinValue > 0) {
@@ -1624,9 +1627,17 @@ export class SectGameManager {
       addedCoins = deltaRepeatCount;
     }
 
-    const giftDisplayName = matchedById && matched
-      ? matched.giftName
-      : event.giftName || (matched ? matched.giftName : `Quà ${addedCoins} Xu`);
+    const rawGiftLabel =
+      matchedById && matched
+        ? resolvedGiftName || matched.giftName
+        : event.giftName || (matched ? resolvedGiftName || matched.giftName : 'Bảo Vật Ma Giáo');
+    // Strip any trailing numeric coin/xu/X suffix from giftDisplayName so gift popups never leak value
+    const giftDisplayName =
+      rawGiftLabel
+        .replace(/\(\s*\+?\d[\d.,]*\s*(?:xu|x)?\s*\)/gi, '')
+        .replace(/\b\+?\d[\d.,]*\s*(?:xu|x)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim() || 'Bảo Vật Ma Giáo';
 
     if (isUnknown && event.giftId) {
       giftRegistry.reportUnknownGift({
@@ -1744,8 +1755,8 @@ export class SectGameManager {
 
     this.addLog(
       'gift',
-      `${disciple.displayName} tặng ${giftDisplayName} (+${addedCoins} xu)`,
-      `Cộng dồn: ${totalCoinsBefore} + ${addedCoins} = ${disciple.totalCoins} xu | Cấp bậc: ${disciple.rankName}${
+      `${disciple.displayName} tặng ${giftDisplayName} (+${addedCoins} X)`,
+      `Cộng dồn: ${totalCoinsBefore} + ${addedCoins} = ${disciple.totalCoins} X | Cấp bậc: ${disciple.rankName}${
         promoted ? ` (Thăng cấp từ ${prevRankName})` : ''
       }${triggeredDietMon ? ' • KÍCH HOẠT ĐẠI SỰ KIỆN DIỆT MÔN!' : ''}`
     );
@@ -1784,6 +1795,7 @@ export class SectGameManager {
       timestamp: Date.now(),
       userId: disciple.userId,
       displayName: disciple.displayName,
+      avatarUrl: disciple.avatarUrl,
       oldRankName: prevRankName,
       newRankId: disciple.rankId,
       newRankName: promoTitle,
@@ -1791,6 +1803,7 @@ export class SectGameManager {
       coinValue: disciple.totalCoins,
       isThroneTakeover: false,
       isCoLeader,
+      isPromotion: true,
     };
     this.promotions = [promo, ...this.promotions].slice(0, 50);
     if (this.config.rankAccumulation?.mode === 'persistent') {
@@ -1902,6 +1915,7 @@ export class SectGameManager {
       timestamp: Date.now(),
       userId: newLeader.userId,
       displayName: newLeader.displayName,
+      avatarUrl: newLeader.avatarUrl,
       oldRankName: prevPlayerRankName,
       newRankId: throneRank.id,
       newRankName: throneRank.name,
@@ -1909,6 +1923,7 @@ export class SectGameManager {
       coinValue: newLeader.totalCoins,
       isThroneTakeover: true,
       isCoLeader: false,
+      isPromotion: true,
     };
     this.promotions = [promo, ...this.promotions].slice(0, 50);
 
@@ -1926,7 +1941,7 @@ export class SectGameManager {
 
     this.addLog(
       'promotion',
-      `ĐĂNG CƠ GIÁO CHỦ (199 XU): ${newLeader.displayName}`,
+      `ĐĂNG CƠ GIÁO CHỦ (199 X): ${newLeader.displayName}`,
       `Dâng ${giftDisplayName} đăng cơ ${throneRank.name}! Giáo Chủ cũ lui về làm Thái Thượng Giáo Chủ.`
     );
   }
@@ -2457,7 +2472,7 @@ export class SectGameManager {
     this.addLog(
       'system',
       `${d.displayName} hết thời gian ở lại — đang đi ra cổng`,
-      `Không tương tác trong ${Math.round((now - (d.lastInteractionAt || d.joinedAt)) / 1000)}s. Bảo lưu ${d.totalCoins} xu (${d.rankName}).`
+      `Không tương tác trong ${Math.round((now - (d.lastInteractionAt || d.joinedAt)) / 1000)}s. Bảo lưu ${d.totalCoins} X (${d.rankName}).`
     );
   }
 
@@ -2482,7 +2497,7 @@ export class SectGameManager {
     this.addLog(
       'system',
       `${d.displayName} đã rời Đại Điện`,
-      `Giải phóng vị trí sảnh. Hồ sơ bảo lưu: ${d.totalCoins} xu • ${d.rankName}.`
+      `Giải phóng vị trí sảnh. Hồ sơ bảo lưu: ${d.totalCoins} X • ${d.rankName}.`
     );
 
     // Promote waiting queue disciples into freed hall slots
@@ -2714,7 +2729,7 @@ export class SectGameManager {
         this.dietMon.queuedCount = this.dietMonQueue.length;
         this.addLog(
           'system',
-          `[Hàng chờ Diệt Môn] ${displayName} (${totalCoins} xu)`,
+          `[Hàng chờ Diệt Môn] ${displayName} (${totalCoins} X)`,
           `Sự kiện Diệt Môn đang diễn ra — đã xếp hàng chờ tiếp theo (${this.dietMonQueue.length}/${maxQ}).`
         );
         this.notify();
@@ -2801,7 +2816,7 @@ export class SectGameManager {
 
     this.addLog(
       'system',
-      `ĐẠI SỰ KIỆN DIỆT MÔN (1.000 XU): ${displayName}`,
+      `ĐẠI SỰ KIỆN DIỆT MÔN: ${displayName} KÍCH HOẠT DIỆT MÔN!`,
       `Kích hoạt 5 giai đoạn (${Math.round(durationMs / 1000)}s): Rung chuyển -> Sập đại điện -> Avatar giáng thế -> Vòng xoáy hút ${allDisciples.length} môn đồ -> Tái thiết đại điện!`
     );
 
@@ -2866,7 +2881,7 @@ export class SectGameManager {
     this.addLog(
       'system',
       `Hoàn tất DIỆT MÔN của ${finishedName} — Đại Điện đã khôi phục`,
-      `Quân số hiện tại: 0 người chơi. Bình luận 1 lần để bước từ cổng vào lại Đại Điện với nguyên cấp bậc & tổng xu.`
+      `Quân số hiện tại: 0 người chơi. Bình luận 1 lần để bước từ cổng vào lại Đại Điện với nguyên cấp bậc & tổng X.`
     );
 
     this.notify();
@@ -3788,7 +3803,7 @@ export class SectGameManager {
       if (this.config.rankAccumulation?.mode === 'persistent') {
         this.savePersistentLedger();
       }
-      this.addLog('system', `Đã đặt lại xu của ${uid} về 0`, `Cấp bậc trở về ${baseRank.name}.`);
+      this.addLog('system', `Đã đặt lại X của ${uid} về 0`, `Cấp bậc trở về ${baseRank.name}.`);
       this.notify();
       return;
     }
@@ -3820,8 +3835,8 @@ export class SectGameManager {
 
     this.addLog(
       'system',
-      'Đã đặt lại toàn bộ Xu & Cấp Bậc về 0 (Dân Đen)',
-      'Sẵn sàng kiểm thử các kịch bản cộng dồn xu mới.'
+      'Đã đặt lại toàn bộ X & Cấp Bậc về 0 (Dân Đen)',
+      'Sẵn sàng kiểm thử các kịch bản cộng dồn X mới.'
     );
     this.notify();
   }
@@ -3885,7 +3900,7 @@ export class SectGameManager {
       this.addLog(
         'system',
         'Khởi động lại phiên (Chế độ Theo Phiên LIVE - Session)',
-        'Đã đặt lại tổng xu về 0 cho phiên LIVE mới.'
+        'Đã đặt lại tổng X về 0 cho phiên LIVE mới.'
       );
     }
     this.notify();
@@ -3971,7 +3986,7 @@ export class SectGameManager {
 
     this.addLog(
       'system',
-      'Đã khôi phục dữ liệu Cấp Bậc & Sổ Vàng Tích Lũy Xu',
+      'Đã khôi phục dữ liệu Cấp Bậc & Sổ Vàng Tích Lũy X',
       `Đã nạp ${this.config.ranks.length} cấp bậc và ${this.playerLedger.size} hồ sơ người chơi.`
     );
     this.notify();
@@ -3987,7 +4002,7 @@ export class SectGameManager {
     }
     this.addLog(
       'system',
-      'Đã khôi phục Bảng Cấp Bậc Chính Thức (0..199 Xu) & Đại Sự Kiện DIỆT MÔN (1.000 Xu)',
+      'Đã khôi phục Bảng Cấp Bậc Chính Thức (0..199 X) & Đại Sự Kiện DIỆT MÔN (1.000 X)',
       '0 Dân Đen / 1 Đệ Tử / 5 Chân Truyền / 10 Tinh Anh / 20 Hộ Pháp / 50 Trưởng Lão / 99 Đồng Tôn / 199 Giáo Chủ / 1.000 DIỆT MÔN.'
     );
     this.notify();

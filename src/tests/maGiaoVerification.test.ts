@@ -16,6 +16,7 @@ import { PersistentGiftStore } from '../../server/giftStore';
 import { PersistentOBSSyncStore } from '../../server/obsSyncStore';
 import { getAvailableVoiceOptions } from '../../server/ttsProxy';
 import { LabelCollisionManager } from '../systems/LabelCollisionManager';
+import { giftRegistry } from '../systems/GiftRegistry';
 
 interface TestResult {
   id: number;
@@ -1792,6 +1793,272 @@ runTest(63, 'Chống xung đột Diệt Môn: Tự dừng Mini Game đang chạy
   return 'Tự dừng Mini Game khi Diệt Môn nổ ra, chống lặp sự kiện 1000 xu trên cùng User, nút Dừng khẩn cấp & Khôi phục Đại Điện hoạt động hoàn hảo.';
 });
 
+// ============================================================================
+// 64. HỆ THỐNG THÊM HÀNG LOẠT 20+ ID QUÀ TIKTOK VÀO NHÓM 1 X & CHỐNG TRÙNG NHÓM
+// ============================================================================
+runTest(64, 'Nhập hàng loạt 20 ID quà vào nhóm 1 X, lọc trùng & chặn ID nằm ở 2 nhóm giá trị khác nhau', () => {
+  const tmpGiftFile = path.resolve(process.cwd(), 'data', 'test_bulk_gifts.json');
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  const store = new PersistentGiftStore(tmpGiftFile);
+
+  // Tạo chuỗi 20 ID mới cho nhóm 1 X (hỗ trợ cả dấu phẩy, chấm phẩy, xuống dòng, khoảng trắng & trùng lặp trong batch)
+  const twentyIds = Array.from({ length: 20 }, (_, i) => String(81001 + i));
+  const rawInputWithDupsAndInvalid = [
+    twentyIds.slice(0, 10).join(', '),
+    twentyIds.slice(10, 15).join('; '),
+    twentyIds.slice(15, 20).join('\n'),
+    twentyIds[0], // duplicate in batch
+    '5655', // already in same group (gift_tier_1)
+    '5658', // conflict with gift_tier_5 (NHÓM 5 X)
+    'abc_invalid', // invalid token
+  ].join('\n');
+
+  const check = store.inspectBulkGiftIds(rawInputWithDupsAndInvalid, 'gift_tier_1');
+  assert.equal(check.validNewIds.length, 20, 'Phải tách đúng 20 ID mới hợp lệ');
+  assert.equal(check.duplicateInBatchIds.length, 1, 'Phải phát hiện 1 ID trùng trong cùng lần nhập');
+  assert.equal(check.alreadyInSameGroupIds.includes('5655'), true, 'Phải phát hiện ID 5655 đã có trong nhóm 1 X');
+  assert.equal(check.conflictOtherGroups.length, 1, 'Phải phát hiện ID 5658 đang thuộc nhóm 5 X');
+  assert.equal(check.conflictOtherGroups[0].coinValue, 5);
+  assert.equal(check.invalidTokens.includes('abc_invalid'), true, 'Phải phát hiện token lỗi định dạng');
+
+  // Lưu khi Admin xác nhận
+  const saveRes = store.bulkAddToGroup('gift_tier_1', twentyIds.join(', '));
+  assert.equal(saveRes.ok, true);
+  assert.equal(saveRes.addedCount, 20);
+
+  // Đồng bộ vào giftRegistry client để kiểm tra resolveGift
+  giftRegistry.setMappingsFromServer(store.getAll());
+  for (const gid of twentyIds) {
+    const resolved = giftRegistry.resolveGift({ giftId: gid });
+    assert.ok(resolved.matched, `ID ${gid} phải được ánh xạ trong GiftRegistry`);
+    assert.equal(resolved.matched?.coinValue, 1, `ID ${gid} phải có giá trị 1 X`);
+  }
+
+  // Kiểm tra di chuyển 1 ID từ nhóm 1 X sang nhóm 5 X
+  const moveRes = store.moveGiftId(twentyIds[19], 'gift_tier_1', 'gift_tier_5');
+  assert.equal(moveRes.ok, true);
+  giftRegistry.setMappingsFromServer(store.getAll());
+  assert.equal(
+    giftRegistry.resolveGift({ giftId: twentyIds[19] }).matched?.coinValue,
+    5,
+    'Sau khi chuyển nhóm, ID phải mang giá trị 5 X'
+  );
+
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  store.resetToDefaults();
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  return 'Nhập hàng loạt 20 ID vào nhóm 1 X, kiểm tra trước khi lưu (Hợp lệ/Trùng/Lỗi/Xung đột nhóm) & chuyển nhóm hoạt động chính xác 100%.';
+});
+
+// ============================================================================
+// 65. CỘNG DỒN QUÀ NGOÀI MỐC & NHIỀU ID KHÁC NHAU TRONG CÙNG NHÓM 1 X
+// ============================================================================
+runTest(65, 'Cộng dồn quà ngoài mốc (3 X + 1 X [ID A] + 1 X [ID B] = 5 X -> Chân Truyền; 20+30=50; 100+99=199; 500+500=1000)', () => {
+  const tmpGiftFile = path.resolve(process.cwd(), 'data', 'test_non_ms_gifts.json');
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  const store = new PersistentGiftStore(tmpGiftFile);
+
+  // Thêm nhóm quà ngoài mốc 3 X (ID: 30003)
+  const create3X = store.create({
+    giftName: 'Phù Chú Tam Tinh',
+    groupName: 'NHÓM 3 X',
+    giftIds: ['30003'],
+    giftIdStrings: ['30003'],
+    coinValue: 3,
+    rankGranted: 'de_tu',
+  });
+  assert.equal(create3X.ok, true);
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  const testGm = new SectGameManager();
+  testGm.stopLoop();
+
+  // 1) Tặng 3 X (ID 30003) + 1 X (ID 5655) + 1 X (ID 7934 - ID khác trong cùng nhóm 1 X) = 5 X -> Chân Truyền
+  const r1 = testGm.handleGiftEvent({
+    id: 'non_ms_1',
+    type: 'gift',
+    timestamp: Date.now(),
+    userId: 'user_3_1_1',
+    uniqueId: 'user_3_1_1',
+    nickname: 'Chu Chỉ Nhược',
+    giftId: '30003',
+    giftCount: 1,
+  });
+  assert.equal(r1.disciple.totalCoins, 3);
+  assert.equal(r1.disciple.rankId, 'de_tu');
+
+  const r2 = testGm.handleGiftEvent({
+    id: 'non_ms_2',
+    type: 'gift',
+    timestamp: Date.now() + 10,
+    userId: 'user_3_1_1',
+    uniqueId: 'user_3_1_1',
+    nickname: 'Chu Chỉ Nhược',
+    giftId: '5655', // ID thứ 1 của nhóm 1 X
+    giftCount: 1,
+  });
+  assert.equal(r2.disciple.totalCoins, 4);
+  assert.equal(r2.promoted, false, '4 X vẫn ở cấp Đệ Tử, chưa thăng cấp lặp');
+
+  const r3 = testGm.handleGiftEvent({
+    id: 'non_ms_3',
+    type: 'gift',
+    timestamp: Date.now() + 20,
+    userId: 'user_3_1_1',
+    uniqueId: 'user_3_1_1',
+    nickname: 'Chu Chỉ Nhược',
+    giftId: '7934', // ID thứ 2 khác nhau trong cùng nhóm 1 X
+    giftCount: 1,
+  });
+  assert.equal(r3.disciple.totalCoins, 5);
+  assert.equal(r3.promoted, true);
+  assert.equal(r3.disciple.rankId, 'chan_truyen');
+  assert.equal(r3.newRankName, 'Chân Truyền');
+
+  // 2) Tặng 20 X + 30 X = 50 X -> Trưởng Lão
+  testGm.handleGiftEvent({
+    id: 'non_ms_20',
+    type: 'gift',
+    timestamp: Date.now() + 30,
+    userId: 'user_20_30',
+    uniqueId: 'user_20_30',
+    nickname: 'Tạ Tốn',
+    coinValue: 20,
+    giftCount: 1,
+  });
+  const r50 = testGm.handleGiftEvent({
+    id: 'non_ms_30',
+    type: 'gift',
+    timestamp: Date.now() + 40,
+    userId: 'user_20_30',
+    uniqueId: 'user_20_30',
+    nickname: 'Tạ Tốn',
+    coinValue: 30,
+    giftCount: 1,
+  });
+  assert.equal(r50.disciple.totalCoins, 50);
+  assert.equal(r50.disciple.rankId, 'truong_lao');
+
+  // 3) Tặng 100 X + 99 X = 199 X -> Giáo Chủ
+  testGm.handleGiftEvent({
+    id: 'non_ms_100',
+    type: 'gift',
+    timestamp: Date.now() + 50,
+    userId: 'user_100_99',
+    uniqueId: 'user_100_99',
+    nickname: 'Tiêu Phong',
+    coinValue: 100,
+    giftCount: 1,
+  });
+  const r199 = testGm.handleGiftEvent({
+    id: 'non_ms_99',
+    type: 'gift',
+    timestamp: Date.now() + 60,
+    userId: 'user_100_99',
+    uniqueId: 'user_100_99',
+    nickname: 'Tiêu Phong',
+    coinValue: 99,
+    giftCount: 1,
+  });
+  assert.equal(r199.disciple.totalCoins, 199);
+  assert.equal(r199.disciple.rankId, 'giao_chu');
+
+  // 4) Tặng 500 X + 500 X = 1.000 X -> DIỆT MÔN
+  testGm.handleGiftEvent({
+    id: 'non_ms_500a',
+    type: 'gift',
+    timestamp: Date.now() + 70,
+    userId: 'user_500_500',
+    uniqueId: 'user_500_500',
+    nickname: 'Độc Cô Cầu Bại',
+    coinValue: 500,
+    giftCount: 1,
+  });
+  const r1000 = testGm.handleGiftEvent({
+    id: 'non_ms_500b',
+    type: 'gift',
+    timestamp: Date.now() + 80,
+    userId: 'user_500_500',
+    uniqueId: 'user_500_500',
+    nickname: 'Độc Cô Cầu Bại',
+    coinValue: 500,
+    giftCount: 1,
+  });
+  assert.equal(r1000.disciple.totalCoins, 1000);
+  assert.equal(r1000.dietMonTriggered, true);
+  testGm.stopDietMonEmergency();
+
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  store.resetToDefaults();
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  return 'Mọi tổ hợp quà ngoài mốc (3+1+1=5, 20+30=50, 100+99=199, 500+500=1000) và nhiều ID trong cùng nhóm 1 X đều cộng dồn chuẩn xác.';
+});
+
+// ============================================================================
+// 66. THÔNG BÁO KHI TẶNG QUÀ TUYỆT ĐỐI KHÔNG HIỂN THỊ SỐ GIÁ TRỊ / XU / X
+// ============================================================================
+runTest(66, 'Thông báo tặng quà & phong chức lọc sạch số giá trị, "xu", "X" trong tên quà & popup', () => {
+  const testGm = new SectGameManager();
+  testGm.stopLoop();
+
+  // Tặng quà có tên chứa số và đơn vị "Quà Lẻ 5 Xu (+5 X)"
+  testGm.handleGiftEvent({
+    id: 'clean_popup_1',
+    type: 'gift',
+    timestamp: Date.now(),
+    userId: 'popup_tester',
+    uniqueId: 'popup_tester',
+    nickname: 'Doãn Chí Bình',
+    coinValue: 5,
+    giftName: 'Quà Lẻ 5 Xu (+5 X)',
+    giftCount: 1,
+  });
+
+  const promo1 = testGm.getSnapshot().promotions[0];
+  assert.ok(promo1, 'Phải tạo thông báo khi nhận quà thăng cấp');
+  assert.equal(promo1.isPromotion, true);
+  assert.equal(/\d/.test(promo1.giftName), false, `Tên quà trong thông báo phải lọc sạch con số giá trị (nhận: "${promo1.giftName}")`);
+  assert.equal(/\b(xu|x)\b/i.test(promo1.giftName), false, 'Tên quà trong thông báo không được chứa chữ xu hoặc X');
+
+  // Kiểm tra Lịch sử quà cũng lọc sạch số/xu khỏi giftName
+  const gh1 = testGm.getSnapshot().giftHistory[0];
+  assert.equal(/\d/.test(gh1.giftName), false);
+  assert.equal(/\b(xu|x)\b/i.test(gh1.giftName), false);
+
+  return 'Thông báo tặng quà & phong chức lọc sạch 100% số lượng, chữ xu và chữ X.';
+});
+
+// ============================================================================
+// 67. XUẤT / NHẬP CSV & JSON DANH SÁCH QUÀ KHÔNG LÀM MẤT ID CŨ
+// ============================================================================
+runTest(67, 'Xuất/Nhập CSV và JSON danh sách ID quà TikTok bảo toàn dữ liệu hiện có', () => {
+  const tmpGiftFile = path.resolve(process.cwd(), 'data', 'test_csv_gifts.json');
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  const store = new PersistentGiftStore(tmpGiftFile);
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  const csvExported = giftRegistry.exportCsv();
+  assert.ok(csvExported.includes('giftId,giftName,coinValue,groupName,enabled'), 'Header CSV phải đúng chuẩn');
+  assert.ok(csvExported.includes('5655'), 'CSV xuất ra phải chứa ID 5655 mặc định');
+
+  store.bulkAddToGroup('gift_tier_10', '91001', 'Hắc Hỏa Lệnh');
+  store.bulkAddToGroup('gift_tier_50', '91002', 'Tử Quang Ấn');
+
+  giftRegistry.setMappingsFromServer(store.getAll());
+  assert.equal(giftRegistry.resolveGift({ giftId: '91001' }).matched?.coinValue, 10);
+  assert.equal(giftRegistry.resolveGift({ giftId: '91002' }).matched?.coinValue, 50);
+  // Đảm bảo ID cũ 5655 vẫn còn nguyên
+  assert.equal(giftRegistry.resolveGift({ giftId: '5655' }).matched?.coinValue, 1);
+
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  store.resetToDefaults();
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  return 'Xuất/Nhập CSV & JSON hoạt động chính xác và bảo toàn toàn bộ ID quà hiện có.';
+});
+
 console.log('================================================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`TỔNG KẾT KIỂM THỬ: ${passedCount}/${results.length} HẠNG MỤC PASS (100%)`);
@@ -1800,6 +2067,7 @@ console.log('===================================================================
 if (passedCount !== results.length) {
   process.exit(1);
 }
+
 
 
 

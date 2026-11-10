@@ -316,7 +316,7 @@ export const DEFAULT_SECT_LEADER_ANIMATIONS: SectLeaderAnimationDef[] = [
     group: 'E',
     durationMs: 4200,
     expression: 'proud',
-    description: 'Nâng chén chúc mừng Đồng Tôn Giáo Chủ (199 xu) an tọa đài bên.',
+    description: 'Nâng chén chúc mừng Đồng Tôn (99 X) an tọa đài bên.',
   },
   {
     id: 'throne_handover',
@@ -329,8 +329,8 @@ export const DEFAULT_SECT_LEADER_ANIMATIONS: SectLeaderAnimationDef[] = [
 ];
 
 // ============================================================================
-// 8 OFFICIAL SECT RANKS (0 -> 1 -> 5 -> 10 -> 20 -> 50 -> 99 -> 199)
-// + 1.000 XU ĐẠI SỰ KIỆN DIỆT MÔN (GIỮ CẤP GIÁO CHỦ)
+// 8 OFFICIAL SECT RANKS (0 -> 1 -> 5 -> 10 -> 20 -> 50 -> 99 -> 199 X)
+// + 1.000 X ĐẠI SỰ KIỆN DIỆT MÔN (GIỮ CẤP GIÁO CHỦ)
 // ============================================================================
 export const DEFAULT_RANKS: RankTierConfig[] = [
   {
@@ -455,7 +455,13 @@ export const DEFAULT_DIET_MON_CONFIG: DietMonConfig = {
 export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   {
     id: 'gift_tier_1',
+    groupName: 'NHÓM 1 X',
     giftIds: [5655, 5656],
+    giftIdStrings: ['5655', '5656'],
+    giftItems: {
+      '5655': { giftId: '5655', giftName: 'Ma Ấn Nhập Môn', enabled: true },
+      '5656': { giftId: '5656', giftName: 'Hương Trầm Nhập Môn', enabled: true },
+    },
     giftId: 5655,
     giftName: 'Ma Ấn Nhập Môn',
     coinValue: 1,
@@ -471,7 +477,13 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_5',
+    groupName: 'NHÓM 5 X',
     giftIds: [5658, 5269],
+    giftIdStrings: ['5658', '5269'],
+    giftItems: {
+      '5658': { giftId: '5658', giftName: 'Lệnh Bài Chân Truyền', enabled: true },
+      '5269': { giftId: '5269', giftName: 'Chén Trà Chân Truyền', enabled: true },
+    },
     giftId: 5658,
     giftName: 'Lệnh Bài Chân Truyền',
     coinValue: 5,
@@ -487,7 +499,13 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_10',
+    groupName: 'NHÓM 10 X',
     giftIds: [8910, 6064],
+    giftIdStrings: ['8910', '6064'],
+    giftItems: {
+      '8910': { giftId: '8910', giftName: 'Huyết Ngọc Tinh Anh', enabled: true },
+      '6064': { giftId: '6064', giftName: 'Bội Kiếm Tinh Anh', enabled: true },
+    },
     giftId: 8910,
     giftName: 'Huyết Ngọc Tinh Anh',
     coinValue: 10,
@@ -503,7 +521,13 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_20',
+    groupName: 'NHÓM 20 X',
     giftIds: [5999, 5487],
+    giftIdStrings: ['5999', '5487'],
+    giftItems: {
+      '5999': { giftId: '5999', giftName: 'Chiến Giáp Hộ Pháp', enabled: true },
+      '5487': { giftId: '5487', giftName: 'Lệnh Kỳ Hộ Pháp', enabled: true },
+    },
     giftId: 5999,
     giftName: 'Chiến Giáp Hộ Pháp',
     coinValue: 20,
@@ -519,7 +543,13 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_50',
+    groupName: 'NHÓM 50 X',
     giftIds: [6093, 6104],
+    giftIdStrings: ['6093', '6104'],
+    giftItems: {
+      '6093': { giftId: '6093', giftName: 'Kim Ấn Trưởng Lão', enabled: true },
+      '6104': { giftId: '6104', giftName: 'Long Trượng Trưởng Lão', enabled: true },
+    },
     giftId: 6093,
     giftName: 'Kim Ấn Trưởng Lão',
     coinValue: 50,
@@ -535,7 +565,13 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_99',
+    groupName: 'NHÓM 99 X',
     giftIds: [5827, 5659],
+    giftIdStrings: ['5827', '5659'],
+    giftItems: {
+      '5827': { giftId: '5827', giftName: 'Bí Kíp Thiên Ma Đồng Tôn', enabled: true },
+      '5659': { giftId: '5659', giftName: 'Tử Kim Ấn Đồng Tôn', enabled: true },
+    },
     giftId: 5827,
     giftName: 'Bí Kíp Thiên Ma Đồng Tôn',
     coinValue: 99,
@@ -551,7 +587,13 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_199',
+    groupName: 'NHÓM 199 X',
     giftIds: [29201, 8913],
+    giftIdStrings: ['29201', '8913'],
+    giftItems: {
+      '29201': { giftId: '29201', giftName: 'Thánh Hỏa Lệnh Giáo Chủ', enabled: true },
+      '8913': { giftId: '8913', giftName: 'Cửu Long Ngọc Tỷ Giáo Chủ', enabled: true },
+    },
     giftId: 29201,
     giftName: 'Thánh Hỏa Lệnh Giáo Chủ',
     coinValue: 199,
@@ -567,12 +609,19 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
   },
   {
     id: 'gift_tier_supreme',
+    groupName: 'NHÓM 1.000 X',
     giftIds: [9999, 29900, 30001],
+    giftIdStrings: ['9999', '29900', '30001'],
+    giftItems: {
+      '9999': { giftId: '9999', giftName: 'Ma Giáo Đại Kiếp – Diệt Môn Lệnh', enabled: true },
+      '29900': { giftId: '29900', giftName: 'Hắc Long Diệt Thế Ấn', enabled: true },
+      '30001': { giftId: '30001', giftName: 'Thiên Ma Vô Thượng Lệnh', enabled: true },
+    },
     giftId: 9999,
     giftName: 'Ma Giáo Đại Kiếp – Diệt Môn Lệnh',
     coinValue: 1000,
     rankGranted: 'giao_chu',
-    inGameEffect: 'ĐẠI SỰ KIỆN DIỆT MÔN 1.000 XU! Sập đại điện, vòng xoáy hút toàn bộ người chơi & tái thiết sảnh!',
+    inGameEffect: 'ĐẠI SỰ KIỆN DIỆT MÔN 1.000 X! Sập đại điện, vòng xoáy hút toàn bộ người chơi & tái thiết sảnh!',
     visualAura: '#EF4444',
     soundEffect: 'fanfare',
     priorityLevel: 10,
@@ -584,14 +633,14 @@ export const DEFAULT_MAGIAO_GIFT_MAPPINGS: GiftMappingConfig[] = [
 ];
 
 export const DEFAULT_MAGIAO_GIFT_PRESETS = [
-  { name: 'Ma Ấn Nhập Môn (1 Xu -> Đệ Tử)', giftIds: [5655], coinValue: 1, rankGranted: 'de_tu' },
-  { name: 'Lệnh Bài Chân Truyền (5 Xu -> Chân Truyền)', giftIds: [5658], coinValue: 5, rankGranted: 'chan_truyen' },
-  { name: 'Huyết Ngọc Tinh Anh (10 Xu -> Tinh Anh)', giftIds: [8910], coinValue: 10, rankGranted: 'tinh_anh' },
-  { name: 'Chiến Giáp Hộ Pháp (20 Xu -> Hộ Pháp)', giftIds: [5999], coinValue: 20, rankGranted: 'ho_phap' },
-  { name: 'Kim Ấn Trưởng Lão (50 Xu -> Trưởng Lão)', giftIds: [6093], coinValue: 50, rankGranted: 'truong_lao' },
-  { name: 'Thiên Ma Đồng Tôn (99 Xu -> Đồng Tôn)', giftIds: [5827], coinValue: 99, rankGranted: 'dong_ton' },
-  { name: 'Thánh Hỏa Lệnh (199 Xu -> Giáo Chủ)', giftIds: [29201], coinValue: 199, rankGranted: 'giao_chu' },
-  { name: 'Diệt Môn Lệnh (1.000 Xu -> Đại Sự Kiện DIỆT MÔN)', giftIds: [9999], coinValue: 1000, rankGranted: 'giao_chu' },
+  { name: 'Ma Ấn Nhập Môn (1 X -> Đệ Tử)', giftIds: [5655], coinValue: 1, rankGranted: 'de_tu' },
+  { name: 'Lệnh Bài Chân Truyền (5 X -> Chân Truyền)', giftIds: [5658], coinValue: 5, rankGranted: 'chan_truyen' },
+  { name: 'Huyết Ngọc Tinh Anh (10 X -> Tinh Anh)', giftIds: [8910], coinValue: 10, rankGranted: 'tinh_anh' },
+  { name: 'Chiến Giáp Hộ Pháp (20 X -> Hộ Pháp)', giftIds: [5999], coinValue: 20, rankGranted: 'ho_phap' },
+  { name: 'Kim Ấn Trưởng Lão (50 X -> Trưởng Lão)', giftIds: [6093], coinValue: 50, rankGranted: 'truong_lao' },
+  { name: 'Thiên Ma Đồng Tôn (99 X -> Đồng Tôn)', giftIds: [5827], coinValue: 99, rankGranted: 'dong_ton' },
+  { name: 'Thánh Hỏa Lệnh (199 X -> Giáo Chủ)', giftIds: [29201], coinValue: 199, rankGranted: 'giao_chu' },
+  { name: 'Diệt Môn Lệnh (1.000 X -> Đại Sự Kiện DIỆT MÔN)', giftIds: [9999], coinValue: 1000, rankGranted: 'giao_chu' },
 ];
 
 // ============================================================================
@@ -794,7 +843,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   },
   zones: {
     throne_zone: { xMin: 40, xMax: 60, yMin: 18.1, yMax: 27.1, label: 'Ngai Vàng Chính Điện' },
-    co_leader_dais: { xMin: 72, xMax: 88, yMin: 22.1, yMax: 29.1, label: 'Đài Đồng Tôn Giáo Chủ (199 Xu)' },
+    co_leader_dais: { xMin: 72, xMax: 88, yMin: 22.1, yMax: 29.1, label: 'Đài Đồng Tôn (99 X)' },
     central_aisle: { xMin: 30, xMax: 70, yMin: 33.5, yMax: 90, label: 'Lối Đi Chính Giữa Đại Điện (Trung Tâm)' },
     left_disciple_wing: { xMin: 10, xMax: 42, yMin: 33.5, yMax: 88, label: 'Không Gian Cánh Tả & Trung Tâm' },
     right_disciple_wing: { xMin: 58, xMax: 90, yMin: 33.5, yMax: 88, label: 'Không Gian Cánh Hữu & Trung Tâm' },
@@ -900,7 +949,7 @@ export function sanitizeStayDurationConfig(
 }
 
 export const DEFAULT_NOTICE_PANELS: NoticePanelConfig[] = [
-  { id: 'gift_rank_table', title: '1. Bảng Lễ Vật & Cấp Bậc Ma Giáo', enabled: true, position: 'top-right', durationMs: 0, priority: 5 },
+  { id: 'gift_rank_table', title: '1. Bảng Phong Ấn & Cấp Bậc Ma Giáo', enabled: true, position: 'top-right', durationMs: 0, priority: 5 },
   { id: 'elder_leaderboard', title: '2. Bảng Vàng 4 Đại Trưởng Lão', enabled: true, position: 'top-left', durationMs: 0, priority: 6 },
   { id: 'promotion_banner', title: '3. Thông Báo Sắc Phong Cấp Bậc', enabled: true, position: 'center-bottom', durationMs: 4000, priority: 8 },
   { id: 'throne_transfer_banner', title: '4. Đại Lễ Đăng Cơ Tân Giáo Chủ', enabled: true, position: 'center-bottom', durationMs: 4000, priority: 10 },

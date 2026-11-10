@@ -203,6 +203,63 @@ async function startServer() {
     res.send(JSON.stringify({ exportedAt: new Date().toISOString(), mappings }, null, 2));
   });
 
+  app.get('/api/gifts/export-csv', (_req, res) => {
+    const mappings = giftStore.getAll();
+    const lines = ['GiftID,GiftName,CoinValueX,GroupName,Enabled'];
+    for (const m of mappings) {
+      const idStrs = m.giftIdStrings && m.giftIdStrings.length > 0 ? m.giftIdStrings : m.giftIds.map(String);
+      for (const idStr of idStrs) {
+        const item = m.giftItems?.[idStr];
+        const gName = (item?.giftName || m.giftName).replace(/"/g, '""');
+        const gGroup = (m.groupName || `NHÓM ${m.coinValue} X`).replace(/"/g, '""');
+        const enabled = item ? item.enabled !== false && m.enabled !== false : m.enabled !== false;
+        lines.push(`${idStr},"${gName}",${m.coinValue},"${gGroup}",${enabled ? '1' : '0'}`);
+      }
+    }
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="magiao-gift-ids.csv"');
+    res.send(lines.join('\n'));
+  });
+
+  app.post('/api/gifts/inspect-bulk', (req, res) => {
+    const rawInput = req.body?.rawInput ?? req.body?.giftIds ?? '';
+    const targetGroupId = req.body?.targetGroupId ? String(req.body.targetGroupId) : undefined;
+    const check = giftStore.inspectBulkGiftIds(rawInput, targetGroupId);
+    res.json({ ok: true, check });
+  });
+
+  app.post('/api/gifts/:id/bulk-add', (req, res) => {
+    const rawInput = req.body?.rawInput ?? req.body?.giftIds ?? '';
+    const defaultItemName = req.body?.defaultItemName ? String(req.body.defaultItemName) : undefined;
+    const result = giftStore.bulkAddToGroup(req.params.id, rawInput, defaultItemName);
+    if (!result.ok) {
+      res.status(400).json({ ok: false, error: result.error, check: result.check });
+      return;
+    }
+    const mappings = giftStore.getAll();
+    io.emit('gifts:updated', mappings);
+    res.json({
+      ok: true,
+      addedCount: result.addedCount,
+      check: result.check,
+      record: result.record,
+      mappings,
+    });
+  });
+
+  app.post('/api/gifts/move-id', (req, res) => {
+    const giftId = req.body?.giftId;
+    const fromGroupId = String(req.body?.fromGroupId || '');
+    const toGroupId = String(req.body?.toGroupId || '');
+    const result = giftStore.moveGiftId(giftId, fromGroupId, toGroupId);
+    if (!result.ok) {
+      res.status(400).json({ ok: false, error: result.error });
+      return;
+    }
+    io.emit('gifts:updated', result.mappings);
+    res.json({ ok: true, mappings: result.mappings });
+  });
+
   app.post('/api/gifts', (req, res) => {
     const result = giftStore.create(req.body || {});
     if (!result.ok) {
@@ -237,7 +294,7 @@ async function startServer() {
   });
 
   app.post('/api/gifts/import', (req, res) => {
-    const mode = req.body?.mode === 'merge' ? 'merge' : 'replace';
+    const mode = req.body?.mode === 'replace' ? 'replace' : 'merge';
     const payload = req.body?.data !== undefined ? req.body.data : req.body;
     const result = giftStore.importJson(payload, mode);
     if (!result.ok) {

@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import {
+  BulkGiftIdCheckResult,
+  GiftItemMetadata,
   GiftMappingConfig,
   GiftMappingInput,
   UnknownGiftLog,
@@ -12,19 +14,60 @@ import {
 
 export { DEFAULT_MAGIAO_GIFT_MAPPINGS, DEFAULT_MAGIAO_GIFT_PRESETS };
 
-export function normalizeGiftIds(giftIds?: number[], legacyGiftId?: number): number[] {
-  const rawList: number[] = [];
-  if (Array.isArray(giftIds)) {
-    for (const id of giftIds) {
-      const n = Number(id);
-      if (Number.isInteger(n) && n > 0) rawList.push(n);
+export function normalizeGiftIdStrings(
+  giftIds?: (number | string)[],
+  giftIdStrings?: string[],
+  legacyGiftId?: number | string
+): string[] {
+  const rawList: string[] = [];
+
+  const pushToken = (val: unknown) => {
+    if (val === undefined || val === null) return;
+    const str = String(val).trim();
+    if (/^\d+$/.test(str) && !/^0+$/.test(str)) {
+      rawList.push(str.replace(/^0+/, ''));
     }
+  };
+
+  if (Array.isArray(giftIdStrings)) {
+    for (const s of giftIdStrings) pushToken(s);
+  }
+  if (Array.isArray(giftIds)) {
+    for (const id of giftIds) pushToken(id);
   }
   if (legacyGiftId !== undefined) {
-    const n = Number(legacyGiftId);
-    if (Number.isInteger(n) && n > 0) rawList.push(n);
+    pushToken(legacyGiftId);
   }
+
   return Array.from(new Set(rawList));
+}
+
+export function normalizeGiftIds(
+  giftIds?: (number | string)[],
+  legacyGiftId?: number | string,
+  giftIdStrings?: string[]
+): number[] {
+  const strs = normalizeGiftIdStrings(giftIds, giftIdStrings, legacyGiftId);
+  const nums: number[] = [];
+  for (const s of strs) {
+    const n = Number(s);
+    if (Number.isFinite(n) && n > 0) {
+      nums.push(n);
+    }
+  }
+  return Array.from(new Set(nums));
+}
+
+/**
+ * Splits a raw bulk string (comma, newline, semicolon, or whitespace separated)
+ * into raw tokens with empty items removed.
+ */
+export function tokenizeBulkGiftIdString(rawText: string): string[] {
+  if (!rawText || typeof rawText !== 'string') return [];
+  return rawText
+    .split(/[\n,;|\s]+/)
+    .map(t => t.trim())
+    .filter(Boolean);
 }
 
 const LEGACY_GIFT_RANKS = new Set([
@@ -66,7 +109,9 @@ export class PersistentGiftStore {
     } catch (err) {
       console.warn('[GiftStore] Failed to load gift store from disk, using defaults:', err);
     }
-    const defaults = structuredClone(DEFAULT_MAGIAO_GIFT_MAPPINGS);
+    const defaults = structuredClone(DEFAULT_MAGIAO_GIFT_MAPPINGS).map(item =>
+      this.sanitizeMapping(item)
+    );
     this.saveToDisk(defaults);
     return defaults;
   }
@@ -85,15 +130,36 @@ export class PersistentGiftStore {
     }
   }
 
-  private sanitizeMapping(raw: Partial<GiftMappingConfig>): GiftMappingConfig {
-    const giftIds = normalizeGiftIds(raw.giftIds, raw.giftId);
+  private sanitizeMapping(raw: Partial<GiftMappingConfig | GiftMappingInput> & { id?: string; createdAt?: string; updatedAt?: string }): GiftMappingConfig {
+    const giftIdStrings = normalizeGiftIdStrings(raw.giftIds, raw.giftIdStrings, raw.giftId);
+    const giftIds = normalizeGiftIds(raw.giftIds, raw.giftId, giftIdStrings);
+    const coinValue = Math.max(1, Number(raw.coinValue || 1));
+    const defaultGiftName = String(raw.giftName || `Bảo Vật ${coinValue.toLocaleString('vi-VN')} X`).trim();
+    const groupName = String(
+      raw.groupName || `NHÓM ${coinValue.toLocaleString('vi-VN')} X`
+    ).trim();
+
+    const existingItems = raw.giftItems && typeof raw.giftItems === 'object' ? raw.giftItems : {};
+    const giftItems: Record<string, GiftItemMetadata> = {};
+    for (const idStr of giftIdStrings) {
+      const prev = existingItems[idStr];
+      giftItems[idStr] = {
+        giftId: idStr,
+        giftName: String(prev?.giftName || defaultGiftName).trim(),
+        enabled: prev?.enabled !== undefined ? Boolean(prev.enabled) : raw.enabled !== false,
+      };
+    }
+
     const now = new Date().toISOString();
     return {
       id: String(raw.id || `gift_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`),
+      groupName,
       giftIds,
+      giftIdStrings,
+      giftItems,
       giftId: giftIds[0],
-      giftName: String(raw.giftName || 'Bảo Vật Ma Giáo').trim(),
-      coinValue: Math.max(1, Number(raw.coinValue || 1)),
+      giftName: defaultGiftName,
+      coinValue,
       rankGranted: raw.rankGranted,
       inGameEffect: String(raw.inGameEffect || 'Tăng công trạng Ma Giáo').trim(),
       visualAura: String(raw.visualAura || '#D4AF37').trim(),
@@ -101,7 +167,7 @@ export class PersistentGiftStore {
       priorityLevel: Math.max(1, Math.min(10, Number(raw.priorityLevel || 1))),
       grantsThrone: Boolean(raw.grantsThrone),
       grantsCoLeader: Boolean(raw.grantsCoLeader),
-      icon: String(raw.icon || '🎁'),
+      icon: String(raw.icon || '🜂'),
       enabled: raw.enabled !== false,
       createdAt: raw.createdAt || now,
       updatedAt: raw.updatedAt || now,
@@ -121,7 +187,7 @@ export class PersistentGiftStore {
   }
 
   public recordUnknownGift(payload: {
-    giftId?: number;
+    giftId?: number | string;
     giftName?: string;
     senderName?: string;
     repeatCount?: number;
@@ -140,38 +206,267 @@ export class PersistentGiftStore {
     return entry;
   }
 
-  public findConflicts(giftIds: number[], excludeRecordId?: string): { giftId: number; existingMapping: GiftMappingConfig }[] {
-    const conflicts: { giftId: number; existingMapping: GiftMappingConfig }[] = [];
-    for (const id of giftIds) {
-      const found = this.mappings.find(
-        m => m.id !== excludeRecordId && normalizeGiftIds(m.giftIds, m.giftId).includes(id)
-      );
+  public findStringConflicts(
+    giftIdStrings: string[],
+    excludeRecordId?: string
+  ): { giftId: string; existingMapping: GiftMappingConfig }[] {
+    const conflicts: { giftId: string; existingMapping: GiftMappingConfig }[] = [];
+    for (const idStr of giftIdStrings) {
+      const found = this.mappings.find(m => {
+        if (m.id === excludeRecordId) return false;
+        const mStrs = normalizeGiftIdStrings(m.giftIds, m.giftIdStrings, m.giftId);
+        return mStrs.includes(idStr);
+      });
       if (found) {
-        conflicts.push({ giftId: id, existingMapping: structuredClone(found) });
+        conflicts.push({ giftId: idStr, existingMapping: structuredClone(found) });
       }
     }
     return conflicts;
   }
 
-  public create(input: GiftMappingInput): { ok: true; record: GiftMappingConfig } | { ok: false; error: string } {
-    const giftIds = normalizeGiftIds(input.giftIds, input.giftId);
-    if (!input.giftName || !input.giftName.trim()) {
-      return { ok: false, error: 'Tên quà TikTok không được để trống.' };
+  public findConflicts(
+    giftIds: (number | string)[],
+    excludeRecordId?: string
+  ): { giftId: number; giftIdStr: string; existingMapping: GiftMappingConfig }[] {
+    const strs = normalizeGiftIdStrings(giftIds);
+    return this.findStringConflicts(strs, excludeRecordId).map(c => ({
+      giftId: Number(c.giftId),
+      giftIdStr: c.giftId,
+      existingMapping: c.existingMapping,
+    }));
+  }
+
+  /**
+   * Inspects a bulk list of gift IDs (string or array) against a target group before saving.
+   */
+  public inspectBulkGiftIds(
+    rawInput: string | (string | number)[],
+    targetGroupId?: string
+  ): BulkGiftIdCheckResult {
+    const tokens = Array.isArray(rawInput)
+      ? rawInput.map(x => String(x).trim()).filter(Boolean)
+      : tokenizeBulkGiftIdString(rawInput);
+
+    const targetGroup = targetGroupId
+      ? this.mappings.find(m => m.id === targetGroupId)
+      : undefined;
+    const sameGroupSet = new Set(
+      targetGroup
+        ? normalizeGiftIdStrings(targetGroup.giftIds, targetGroup.giftIdStrings, targetGroup.giftId)
+        : []
+    );
+
+    const seenInBatch = new Set<string>();
+    const validNewIds: string[] = [];
+    const invalidTokens: string[] = [];
+    const duplicateInBatchIds: string[] = [];
+    const alreadyInSameGroupIds: string[] = [];
+    const conflictOtherGroups: BulkGiftIdCheckResult['conflictOtherGroups'] = [];
+
+    for (const token of tokens) {
+      if (!/^\d+$/.test(token) || /^0+$/.test(token)) {
+        invalidTokens.push(token);
+        continue;
+      }
+      const cleanId = token.replace(/^0+/, '');
+      if (seenInBatch.has(cleanId)) {
+        duplicateInBatchIds.push(cleanId);
+        continue;
+      }
+      seenInBatch.add(cleanId);
+
+      if (sameGroupSet.has(cleanId)) {
+        alreadyInSameGroupIds.push(cleanId);
+        continue;
+      }
+
+      const otherConflict = this.findStringConflicts([cleanId], targetGroupId)[0];
+      if (otherConflict) {
+        conflictOtherGroups.push({
+          giftId: cleanId,
+          groupId: otherConflict.existingMapping.id,
+          groupName:
+            otherConflict.existingMapping.groupName ||
+            `NHÓM ${otherConflict.existingMapping.coinValue.toLocaleString('vi-VN')} X`,
+          coinValue: otherConflict.existingMapping.coinValue,
+        });
+        continue;
+      }
+
+      validNewIds.push(cleanId);
     }
-    const conflicts = this.findConflicts(giftIds);
+
+    return {
+      rawCount: tokens.length,
+      validNewIds,
+      invalidTokens,
+      duplicateInBatchIds,
+      alreadyInSameGroupIds,
+      conflictOtherGroups,
+    };
+  }
+
+  /**
+   * Bulk-adds verified Gift IDs into a value group (or creates the value group if needed).
+   */
+  public bulkAddToGroup(
+    targetGroupId: string,
+    rawInput: string | (string | number)[],
+    defaultItemName?: string
+  ): {
+    ok: boolean;
+    addedCount: number;
+    check: BulkGiftIdCheckResult;
+    record?: GiftMappingConfig;
+    error?: string;
+  } {
+    const idx = this.mappings.findIndex(m => m.id === targetGroupId);
+    if (idx === -1) {
+      return {
+        ok: false,
+        addedCount: 0,
+        check: this.inspectBulkGiftIds(rawInput),
+        error: `Không tìm thấy nhóm quà có ID "${targetGroupId}".`,
+      };
+    }
+
+    const check = this.inspectBulkGiftIds(rawInput, targetGroupId);
+    if (check.validNewIds.length === 0) {
+      const reason =
+        check.conflictOtherGroups.length > 0
+          ? `Phát hiện ${check.conflictOtherGroups.length} ID đã tồn tại ở nhóm khác (VD: ID ${check.conflictOtherGroups[0].giftId} thuộc ${check.conflictOtherGroups[0].groupName}).`
+          : check.alreadyInSameGroupIds.length > 0
+          ? 'Tất cả ID nhập vào đều đã có sẵn trong nhóm này.'
+          : 'Không có Gift ID hợp lệ nào để thêm.';
+      return {
+        ok: false,
+        addedCount: 0,
+        check,
+        error: reason,
+      };
+    }
+
+    const group = this.mappings[idx];
+    const currentStrs = normalizeGiftIdStrings(group.giftIds, group.giftIdStrings, group.giftId);
+    const mergedStrs = Array.from(new Set([...currentStrs, ...check.validNewIds]));
+    const nextItems: Record<string, GiftItemMetadata> = { ...(group.giftItems || {}) };
+
+    for (const idStr of check.validNewIds) {
+      nextItems[idStr] = {
+        giftId: idStr,
+        giftName: (defaultItemName && defaultItemName.trim()) || group.giftName,
+        enabled: true,
+      };
+    }
+
+    const updated = this.sanitizeMapping({
+      ...group,
+      giftIdStrings: mergedStrs,
+      giftIds: mergedStrs,
+      giftItems: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+
+    this.mappings[idx] = updated;
+    this.saveToDisk(this.mappings);
+
+    return {
+      ok: true,
+      addedCount: check.validNewIds.length,
+      check,
+      record: structuredClone(updated),
+    };
+  }
+
+  /**
+   * Moves a single Gift ID from its current group to another target group.
+   */
+  public moveGiftId(
+    giftIdInput: string | number,
+    fromGroupId: string,
+    toGroupId: string
+  ): { ok: boolean; error?: string; mappings: GiftMappingConfig[] } {
+    const idStr = String(giftIdInput).trim();
+    if (!idStr || fromGroupId === toGroupId) {
+      return { ok: false, error: 'Nhóm đích không hợp lệ.', mappings: this.getAll() };
+    }
+    const fromIdx = this.mappings.findIndex(m => m.id === fromGroupId);
+    const toIdx = this.mappings.findIndex(m => m.id === toGroupId);
+    if (fromIdx === -1 || toIdx === -1) {
+      return { ok: false, error: 'Không tìm thấy nhóm nguồn hoặc nhóm đích.', mappings: this.getAll() };
+    }
+
+    const fromGroup = this.mappings[fromIdx];
+    const toGroup = this.mappings[toIdx];
+    const itemMeta = fromGroup.giftItems?.[idStr] || {
+      giftId: idStr,
+      giftName: toGroup.giftName,
+      enabled: true,
+    };
+
+    const nextFromStrs = normalizeGiftIdStrings(
+      fromGroup.giftIds,
+      fromGroup.giftIdStrings,
+      fromGroup.giftId
+    ).filter(s => s !== idStr);
+    const nextFromItems = { ...(fromGroup.giftItems || {}) };
+    delete nextFromItems[idStr];
+
+    const nextToStrs = Array.from(
+      new Set([
+        ...normalizeGiftIdStrings(toGroup.giftIds, toGroup.giftIdStrings, toGroup.giftId),
+        idStr,
+      ])
+    );
+    const nextToItems: Record<string, GiftItemMetadata> = {
+      ...(toGroup.giftItems || {}),
+      [idStr]: {
+        giftId: idStr,
+        giftName: itemMeta.giftName || toGroup.giftName,
+        enabled: itemMeta.enabled !== false,
+      },
+    };
+
+    this.mappings[fromIdx] = this.sanitizeMapping({
+      ...fromGroup,
+      giftIdStrings: nextFromStrs,
+      giftIds: nextFromStrs,
+      giftItems: nextFromItems,
+      updatedAt: new Date().toISOString(),
+    });
+    this.mappings[toIdx] = this.sanitizeMapping({
+      ...toGroup,
+      giftIdStrings: nextToStrs,
+      giftIds: nextToStrs,
+      giftItems: nextToItems,
+      updatedAt: new Date().toISOString(),
+    });
+
+    this.saveToDisk(this.mappings);
+    return { ok: true, mappings: this.getAll() };
+  }
+
+  public create(
+    input: GiftMappingInput
+  ): { ok: true; record: GiftMappingConfig } | { ok: false; error: string } {
+    const giftIdStrings = normalizeGiftIdStrings(input.giftIds, input.giftIdStrings, input.giftId);
+    if (!input.giftName || !input.giftName.trim()) {
+      return { ok: false, error: 'Tên quà / nhóm quà TikTok không được để trống.' };
+    }
+    const conflicts = this.findStringConflicts(giftIdStrings);
     if (conflicts.length > 0) {
       const c = conflicts[0];
       return {
         ok: false,
-        error: `Gift ID ${c.giftId} đã được gán cho quà "${c.existingMapping.giftName}". Không cho phép trùng Gift ID.`,
+        error: `Gift ID ${c.giftId} đã được gán cho "${c.existingMapping.giftName}" (${c.existingMapping.coinValue} X). Không cho phép trùng Gift ID ở 2 nhóm khác nhau.`,
       };
     }
 
     const record = this.sanitizeMapping({
       ...input,
       id: `gift_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      giftIds,
-      giftId: giftIds[0],
+      giftIdStrings,
+      giftIds: giftIdStrings,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -180,23 +475,26 @@ export class PersistentGiftStore {
     return { ok: true, record: structuredClone(record) };
   }
 
-  public update(id: string, input: Partial<GiftMappingInput>): { ok: true; record: GiftMappingConfig } | { ok: false; error: string } {
+  public update(
+    id: string,
+    input: Partial<GiftMappingInput>
+  ): { ok: true; record: GiftMappingConfig } | { ok: false; error: string } {
     const idx = this.mappings.findIndex(m => m.id === id);
     if (idx === -1) {
       return { ok: false, error: `Không tìm thấy cấu hình quà có ID "${id}".` };
     }
     const existing = this.mappings[idx];
-    const nextGiftIds =
-      input.giftIds !== undefined || input.giftId !== undefined
-        ? normalizeGiftIds(input.giftIds, input.giftId)
-        : normalizeGiftIds(existing.giftIds, existing.giftId);
+    const nextGiftIdStrings =
+      input.giftIds !== undefined || input.giftIdStrings !== undefined || input.giftId !== undefined
+        ? normalizeGiftIdStrings(input.giftIds, input.giftIdStrings, input.giftId)
+        : normalizeGiftIdStrings(existing.giftIds, existing.giftIdStrings, existing.giftId);
 
-    const conflicts = this.findConflicts(nextGiftIds, id);
+    const conflicts = this.findStringConflicts(nextGiftIdStrings, id);
     if (conflicts.length > 0) {
       const c = conflicts[0];
       return {
         ok: false,
-        error: `Gift ID ${c.giftId} đã thuộc về quà "${c.existingMapping.giftName}".`,
+        error: `Gift ID ${c.giftId} đã thuộc về nhóm "${c.existingMapping.giftName}" (${c.existingMapping.coinValue} X).`,
       };
     }
 
@@ -204,8 +502,9 @@ export class PersistentGiftStore {
       ...existing,
       ...input,
       id: existing.id,
-      giftIds: nextGiftIds,
-      giftId: nextGiftIds[0],
+      giftIdStrings: nextGiftIdStrings,
+      giftIds: nextGiftIdStrings,
+      giftItems: input.giftItems ? { ...(existing.giftItems || {}), ...input.giftItems } : existing.giftItems,
       createdAt: existing.createdAt,
       updatedAt: new Date().toISOString(),
     });
@@ -225,12 +524,17 @@ export class PersistentGiftStore {
   }
 
   public resetToDefaults(): GiftMappingConfig[] {
-    this.mappings = structuredClone(DEFAULT_MAGIAO_GIFT_MAPPINGS);
+    this.mappings = structuredClone(DEFAULT_MAGIAO_GIFT_MAPPINGS).map(m =>
+      this.sanitizeMapping(m)
+    );
     this.saveToDisk(this.mappings);
     return this.getAll();
   }
 
-  public importJson(rawPayload: unknown, mode: 'replace' | 'merge' = 'replace'): {
+  public importJson(
+    rawPayload: unknown,
+    mode: 'replace' | 'merge' = 'merge'
+  ): {
     ok: boolean;
     count: number;
     mappings: GiftMappingConfig[];
@@ -239,12 +543,21 @@ export class PersistentGiftStore {
     let arr: unknown[] | null = null;
     if (Array.isArray(rawPayload)) {
       arr = rawPayload;
-    } else if (rawPayload && typeof rawPayload === 'object' && Array.isArray((rawPayload as { mappings?: unknown[] }).mappings)) {
+    } else if (
+      rawPayload &&
+      typeof rawPayload === 'object' &&
+      Array.isArray((rawPayload as { mappings?: unknown[] }).mappings)
+    ) {
       arr = (rawPayload as { mappings: unknown[] }).mappings;
     }
 
     if (!arr || arr.length === 0) {
-      return { ok: false, count: 0, mappings: this.getAll(), error: 'Dữ liệu JSON không chứa danh sách quà hợp lệ.' };
+      return {
+        ok: false,
+        count: 0,
+        mappings: this.getAll(),
+        error: 'Dữ liệu JSON không chứa danh sách quà hợp lệ.',
+      };
     }
 
     const sanitized = arr.map(item => this.sanitizeMapping(item as Partial<GiftMappingConfig>));
@@ -252,9 +565,56 @@ export class PersistentGiftStore {
     if (mode === 'replace') {
       this.mappings = sanitized;
     } else {
+      // Safe merge without overwriting existing IDs that belong to other groups
       const byId = new Map<string, GiftMappingConfig>();
-      for (const m of this.mappings) byId.set(m.id, m);
-      for (const m of sanitized) byId.set(m.id, m);
+      const usedGiftIds = new Set<string>();
+      for (const m of this.mappings) {
+        byId.set(m.id, m);
+        for (const gid of normalizeGiftIdStrings(m.giftIds, m.giftIdStrings, m.giftId)) {
+          usedGiftIds.add(gid);
+        }
+      }
+      for (const incoming of sanitized) {
+        const existing = byId.get(incoming.id);
+        const incomingIds = normalizeGiftIdStrings(
+          incoming.giftIds,
+          incoming.giftIdStrings,
+          incoming.giftId
+        );
+        if (existing) {
+          const existingIds = normalizeGiftIdStrings(
+            existing.giftIds,
+            existing.giftIdStrings,
+            existing.giftId
+          );
+          const nonConflicting = incomingIds.filter(
+            id => existingIds.includes(id) || !usedGiftIds.has(id)
+          );
+          for (const id of nonConflicting) usedGiftIds.add(id);
+          const mergedStrs = Array.from(new Set([...existingIds, ...nonConflicting]));
+          byId.set(
+            existing.id,
+            this.sanitizeMapping({
+              ...existing,
+              ...incoming,
+              giftIdStrings: mergedStrs,
+              giftIds: mergedStrs,
+              giftItems: { ...(existing.giftItems || {}), ...(incoming.giftItems || {}) },
+            })
+          );
+        } else {
+          const nonConflicting = incomingIds.filter(id => !usedGiftIds.has(id));
+          for (const id of nonConflicting) usedGiftIds.add(id);
+          byId.set(
+            incoming.id,
+            this.sanitizeMapping({
+              ...incoming,
+              giftIdStrings: nonConflicting,
+              giftIds: nonConflicting,
+            })
+          );
+        }
+      }
       this.mappings = Array.from(byId.values());
     }
 

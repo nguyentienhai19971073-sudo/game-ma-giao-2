@@ -709,7 +709,7 @@ function drawCoLeaderDais(ctx: CanvasRenderingContext2D, cx: number, cy: number,
   ctx.fillStyle = '#E9D5FF';
   ctx.font = 'bold 7.5px "Plus Jakarta Sans", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('ĐÀI ĐỒNG TÔN (99 XU)', 0, 20);
+  ctx.fillText('ĐÀI ĐỒNG TÔN (99 X)', 0, 20);
   ctx.restore();
 }
 
