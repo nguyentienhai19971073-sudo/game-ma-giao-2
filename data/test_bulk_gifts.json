@@ -34,8 +34,8 @@
     "grantsCoLeader": false,
     "icon": "🜂",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_5",
@@ -72,8 +72,8 @@
     "grantsCoLeader": false,
     "icon": "🜁",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_10",
@@ -110,8 +110,8 @@
     "grantsCoLeader": false,
     "icon": "🜂",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_20",
@@ -148,8 +148,8 @@
     "grantsCoLeader": false,
     "icon": "🜃",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_50",
@@ -186,8 +186,8 @@
     "grantsCoLeader": false,
     "icon": "🜄",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_99",
@@ -224,8 +224,8 @@
     "grantsCoLeader": true,
     "icon": "⚜️",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_199",
@@ -262,8 +262,8 @@
     "grantsCoLeader": false,
     "icon": "👑",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   },
   {
     "id": "gift_tier_supreme",
@@ -307,7 +307,7 @@
     "grantsCoLeader": false,
     "icon": "🌀",
     "enabled": true,
-    "createdAt": "2026-11-10T13:34:55.983Z",
-    "updatedAt": "2026-11-10T13:34:55.983Z"
+    "createdAt": "2026-11-10T14:13:16.672Z",
+    "updatedAt": "2026-11-10T14:13:16.672Z"
   }
 ]

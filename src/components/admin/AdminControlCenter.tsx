@@ -28,6 +28,7 @@ import { liveConnectionManager } from '../../systems/LiveConnectionManager';
 import { giftRegistry } from '../../systems/GiftRegistry';
 import { voiceManager, VoiceStateSnapshot } from '../../systems/VoiceManager';
 import { soundSynthesizer } from '../../systems/SoundSynthesizer';
+import { MaGiaoRankEmblemSVG } from '../ui/MaGiaoOverlayHUD';
 
 interface AdminControlCenterProps {
   snapshot: GameStateSnapshot;
@@ -84,6 +85,28 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
   const [giftImportText, setGiftImportText] = useState<string>('');
   const [showGiftImportBox, setShowGiftImportBox] = useState<boolean>(false);
   const [, setGiftRegistryVersion] = useState<number>(0);
+
+  // Per-group Textarea & Metadata state for Section 1: QUẢN LÝ ID QUÀ TIKTOK
+  const [groupBulkTextareas, setGroupBulkTextareas] = useState<Record<string, string>>({});
+  const [groupBulkFeedback, setGroupBulkFeedback] = useState<
+    Record<string, { type: 'ok' | 'err'; text: string }>
+  >({});
+  const [editingGroupMetaId, setEditingGroupMetaId] = useState<string | null>(null);
+  const [groupCoinValueDraft, setGroupCoinValueDraft] = useState<number>(1);
+  const [groupAdminGiftNameDraft, setGroupAdminGiftNameDraft] = useState<string>('');
+  const [singleAddGroupDrafts, setSingleAddGroupDrafts] = useState<
+    Record<string, { giftId: string; giftName: string }>
+  >({});
+
+  // Section 2: CHỈNH SỬA BẢNG PHONG ẤN state
+  const [editingPhongAnRowId, setEditingPhongAnRowId] = useState<string | null>(null);
+  const [phongAnDraftCoins, setPhongAnDraftCoins] = useState<number>(1);
+  const [phongAnDraftName, setPhongAnDraftName] = useState<string>('');
+  const [phongAnDraftOrder, setPhongAnDraftOrder] = useState<number>(10);
+  const [phongAnDraftEnabled, setPhongAnDraftEnabled] = useState<boolean>(true);
+  const [newPhongAnRankCoins, setNewPhongAnRankCoins] = useState<number>(30);
+  const [newPhongAnRankName, setNewPhongAnRankName] = useState<string>('');
+  const [showAddPhongAnRankBox, setShowAddPhongAnRankBox] = useState<boolean>(false);
 
   // Diệt Môn 1.000 X Test state
   const [dietMonTestName, setDietMonTestName] = useState('Độc Cô Bá Chủ');
@@ -2170,23 +2193,23 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
         )}
 
         {/* ==================================================================
-            7. QUẢN LÝ QUÀ TIKTOK (MULTI-ID PER GROUP, BULK PASTE, TABLE, CSV/JSON)
+            7. QUÀ TIKTOK & PHONG ẤN (HAI KHU VỰC QUẢN LÝ RIÊNG, LIÊN KẾT LOGIC)
            ================================================================== */}
         {activeTab === 'tiktok_gifts' && (
-          <div className="space-y-4">
-            {/* Quick Accumulation Status Bar inside Tab 7 */}
-            <div className="p-2.5 rounded-lg bg-stone-900 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[11px] text-stone-200">
-                💰 Chế độ Cộng Dồn Tổng X:{' '}
-                <strong className="text-emerald-400">
-                  {config.rankAccumulation?.enabled !== false ? 'ĐANG BẬT (Cộng dồn nhiều lần tặng)' : 'ĐANG TẮT'}
-                </strong>{' '}
-                • Lưu trữ:{' '}
-                <strong className="text-amber-300">
-                  {config.rankAccumulation?.mode === 'persistent'
-                    ? 'Qua nhiều phiên LIVE (Persistent)'
-                    : 'Theo phiên LIVE hiện tại (Session)'}
-                </strong>
+          <div className="space-y-5">
+            {/* Banner: Nguyên tắc liên kết dữ liệu giữa QUẢN LÝ ID QUÀ TIKTOK và BẢNG PHONG ẤN */}
+            <div className="p-3 rounded-lg bg-gradient-to-r from-stone-900 via-purple-950/40 to-stone-900 border border-amber-500/40 flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <div className="font-bold text-amber-300 text-xs sm:text-sm uppercase flex items-center gap-2">
+                  <span>🎁 QUÀ TIKTOK &amp; BẢNG PHONG ẤN (LIÊN KẾT LOGIC X TÍCH LŨY)</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[10px]">
+                    Tổng X mới = Tổng X hiện tại + (Giá trị X của ID quà × Số lượng)
+                  </span>
+                </div>
+                <div className="text-[11px] text-stone-300">
+                  • <strong>Khu vực 1 (Quản Lý ID Quà TikTok):</strong> Chỉ dùng để nhận diện Gift ID cộng bao nhiêu <strong>X</strong> (tên quà chỉ phục vụ quản trị, <em>không bao giờ</em> hiện lên bảng Phong Ấn).
+                  {' '}• <strong>Khu vực 2 (Chỉnh Sửa Bảng Phong Ấn):</strong> Quản lý trực tiếp <strong>Mốc X</strong> và <strong>Tên cấp bậc / Sự kiện</strong> hiển thị trên màn hình LIVE và điều kiện thăng cấp.
+                </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <button
@@ -2203,132 +2226,558 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                   onClick={() => setActiveTab('ranks')}
                   className="px-2.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-black text-[11px] font-bold cursor-pointer"
                 >
-                  🎖️ Xem Sổ X & Lịch Sử Thăng Cấp
+                  🎖️ Xem Sổ X &amp; Lịch Sử Thăng Cấp
                 </button>
               </div>
             </div>
 
-            {/* A. CHỨC NĂNG THÊM DANH SÁCH ID QUÀ HÀNG LOẠT (SECTION VI) */}
+            {/* ==============================================================
+                KHU VỰC 1: 1. QUẢN LÝ ID QUÀ TIKTOK
+               ============================================================== */}
             <div
-              data-testid="panel-bulk-gift-ids"
-              className="p-3.5 rounded-lg bg-stone-900 border border-purple-500/40 space-y-3"
+              data-testid="section-tiktok-gift-id-manager"
+              className="p-4 rounded-xl bg-stone-900/95 border-2 border-purple-500/40 space-y-4"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800 pb-2.5">
                 <div>
-                  <div className="font-bold text-purple-300 uppercase text-xs sm:text-sm">
-                    📦 Thêm Danh Sách ID Quà TikTok Hàng Loạt Theo Nhóm Giá Trị X
-                  </div>
-                  <div className="text-[11px] text-stone-400">
-                    Hỗ trợ dán 10–100+ ID quà TikTok cùng lúc (ngăn cách bằng dấu phẩy, chấm phẩy, khoảng trắng hoặc xuống dòng). Một ID quà không thể thuộc 2 nhóm giá trị khác nhau.
-                  </div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-amber-300 uppercase tracking-wide">
+                    1. QUẢN LÝ ID QUÀ TIKTOK (THEO TỪNG NHÓM GIÁ TRỊ X)
+                  </h3>
+                  <p className="text-[11px] text-stone-400">
+                    Phân quà TikTok theo từng nhóm giá trị: <strong>1 X, 5 X, 10 X, 20 X, 50 X, 99 X, 199 X, 1.000 X</strong> (và các nhóm tùy chỉnh 2 X, 3 X, 30 X, 100 X, 500 X...). Mỗi nhóm có ô <strong>TEXTAREA</strong> riêng để dán nhiều ID cùng lúc.
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { id: 'gift_tier_1', label: 'NHÓM 1 X' },
-                    { id: 'gift_tier_5', label: 'NHÓM 5 X' },
-                    { id: 'gift_tier_10', label: 'NHÓM 10 X' },
-                    { id: 'gift_tier_20', label: 'NHÓM 20 X' },
-                    { id: 'gift_tier_50', label: 'NHÓM 50 X' },
-                    { id: 'gift_tier_99', label: 'NHÓM 99 X' },
-                    { id: 'gift_tier_199', label: 'NHÓM 199 X' },
-                    { id: 'gift_tier_supreme', label: 'NHÓM 1.000 X' },
-                  ].map(preset => (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-stone-400">Tạo nhanh nhóm:</span>
+                  {[2, 3, 30, 100, 500].map(valX => (
                     <button
-                      key={preset.id}
+                      key={valX}
                       type="button"
-                      onClick={() => {
-                        setBulkTargetGroupId(preset.id);
-                        setBulkCheckPreview(null);
+                      onClick={async () => {
+                        const existing = giftRegistry.getAll().find(g => g.coinValue === valX);
+                        if (existing) {
+                          notifySync(`Nhóm ${valX} X đã tồn tại (${existing.groupName || existing.giftName})!`);
+                          return;
+                        }
+                        const res = await giftRegistry.createGift({
+                          giftName: `Bảo Vật ${valX} X`,
+                          groupName: `NHÓM ${valX.toLocaleString('vi-VN')} X`,
+                          giftIds: [],
+                          giftIdStrings: [],
+                          coinValue: valX,
+                          rankGranted: 'de_tu',
+                        });
+                        if (res.ok) {
+                          notifySync(`✓ Đã tạo nhóm giá trị mới: ${valX} X!`);
+                        }
                       }}
-                      className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition ${
-                        bulkTargetGroupId === preset.id
-                          ? 'bg-purple-600 text-white border border-amber-300 shadow'
-                          : 'bg-stone-950 hover:bg-stone-800 text-stone-300 border border-stone-700'
-                      }`}
+                      className="px-2 py-1 rounded bg-stone-950 hover:bg-purple-900/60 text-amber-300 border border-amber-500/30 text-[11px] font-bold cursor-pointer"
                     >
-                      {preset.label}
+                      + {valX} X
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <label className="block text-[11px]">
-                  <span className="text-stone-400 block mb-1">Chọn nhóm giá trị đích:</span>
-                  <select
-                    data-testid="select-bulk-gift-group"
-                    value={bulkTargetGroupId}
-                    onChange={e => {
-                      setBulkTargetGroupId(e.target.value);
-                      setBulkCheckPreview(null);
-                    }}
-                    className="w-full px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 text-amber-300 font-bold"
-                  >
-                    {giftRegistry.getAll().map(g => (
-                      <option key={g.id} value={g.id}>
-                        {g.groupName || `NHÓM ${g.coinValue} X`} — {g.giftName} ({g.coinValue.toLocaleString('vi-VN')} X)
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              {/* DANH SÁCH CÁC Ô TEXTAREA THEO TỪNG NHÓM GIÁ TRỊ X (1 X, 5 X, 10 X, 20 X, 50 X, 99 X, 199 X, 1.000 X, ...) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {[...giftRegistry.getAll()]
+                  .sort((a, b) => a.coinValue - b.coinValue)
+                  .map(group => {
+                    const groupIds = giftRegistry.getGroupGiftIdStrings(group);
+                    const textareaVal =
+                      groupBulkTextareas[group.id] !== undefined
+                        ? groupBulkTextareas[group.id]
+                        : '';
+                    const fb = groupBulkFeedback[group.id];
+                    const isEditingMeta = editingGroupMetaId === group.id;
+                    const singleDraft = singleAddGroupDrafts[group.id] || {
+                      giftId: '',
+                      giftName: '',
+                    };
 
-                <label className="block text-[11px]">
-                  <span className="text-stone-400 block mb-1">Tên quà mặc định cho các ID mới (tùy chọn):</span>
-                  <input
-                    type="text"
-                    value={bulkDefaultGiftName}
-                    onChange={e => setBulkDefaultGiftName(e.target.value)}
-                    placeholder="Để trống sẽ dùng tên nhóm quà"
-                    className="w-full px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 text-stone-100"
-                  />
-                </label>
+                    return (
+                      <div
+                        key={group.id}
+                        data-testid={`gift-group-card-${group.id}`}
+                        className="p-3 rounded-lg bg-stone-950 border border-stone-800 hover:border-amber-500/40 space-y-2.5 flex flex-col justify-between"
+                      >
+                        <div className="space-y-2">
+                          {/* Group Header: Value X + Group Name + Edit X button */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800/80 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded bg-amber-500/20 border border-amber-400/60 text-amber-300 font-mono font-extrabold text-xs">
+                                {group.coinValue.toLocaleString('vi-VN')} X
+                              </span>
+                              <div>
+                                <div className="font-bold text-stone-100 text-xs">
+                                  {group.groupName || `NHÓM ${group.coinValue.toLocaleString('vi-VN')} X`}
+                                </div>
+                                <div className="text-[10px] text-stone-400">
+                                  Tên quà mặc định (Admin):{' '}
+                                  <strong className="text-stone-200">{group.giftName}</strong> • Đang có:{' '}
+                                  <strong className="text-emerald-400">{groupIds.length} ID</strong>
+                                </div>
+                              </div>
+                            </div>
 
-                <label className="flex items-center gap-2 pt-5 cursor-pointer text-[11px]">
-                  <input
-                    type="checkbox"
-                    checked={bulkOverwriteConflicts}
-                    onChange={e => setBulkOverwriteConflicts(e.target.checked)}
-                  />
-                  <span className="text-amber-200 font-semibold">
-                    Chuyển luôn ID sang nhóm này nếu đang nằm ở nhóm giá trị khác
-                  </span>
-                </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isEditingMeta) {
+                                    setEditingGroupMetaId(null);
+                                  } else {
+                                    setEditingGroupMetaId(group.id);
+                                    setGroupCoinValueDraft(group.coinValue);
+                                    setGroupAdminGiftNameDraft(group.giftName);
+                                  }
+                                }}
+                                className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 text-[10px] font-semibold cursor-pointer"
+                              >
+                                {isEditingMeta ? 'Đóng Sửa Nhóm' : '⚙ Sửa Mốc X / Tên Nhóm'}
+                              </button>
+                              {!group.id.startsWith('gift_tier_') && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await giftRegistry.deleteGift(group.id);
+                                    notifySync(`Đã xóa nhóm ${group.coinValue} X!`);
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-red-950 hover:bg-red-800 text-red-300 border border-red-500/30 text-[10px] cursor-pointer"
+                                >
+                                  Xóa Nhóm
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Edit Group CoinValue X & Default Admin Gift Name */}
+                          {isEditingMeta && (
+                            <div className="p-2 rounded bg-stone-900 border border-amber-500/40 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                              <label className="block">
+                                <span className="text-stone-400 block mb-0.5">Giá trị X của nhóm:</span>
+                                <input
+                                  data-testid={`input-group-coin-${group.id}`}
+                                  type="number"
+                                  min={1}
+                                  value={groupCoinValueDraft}
+                                  onChange={e => setGroupCoinValueDraft(Math.max(1, Number(e.target.value)))}
+                                  className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-700 font-mono text-amber-300 font-bold"
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="text-stone-400 block mb-0.5">Tên quà quản trị:</span>
+                                <input
+                                  type="text"
+                                  value={groupAdminGiftNameDraft}
+                                  onChange={e => setGroupAdminGiftNameDraft(e.target.value)}
+                                  className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-700 text-stone-100"
+                                />
+                              </label>
+                              <div className="flex items-end gap-1">
+                                <button
+                                  data-testid={`btn-save-group-coin-${group.id}`}
+                                  type="button"
+                                  onClick={async () => {
+                                    const nextX = Math.max(1, Math.round(groupCoinValueDraft));
+                                    const nextName =
+                                      groupAdminGiftNameDraft.trim() || `Bảo Vật ${nextX} X`;
+                                    const res = await giftRegistry.updateGift(group.id, {
+                                      coinValue: nextX,
+                                      giftName: nextName,
+                                      groupName: `NHÓM ${nextX.toLocaleString('vi-VN')} X`,
+                                    });
+                                    if (res.ok) {
+                                      setEditingGroupMetaId(null);
+                                      notifySync(
+                                        `✓ Đã cập nhật nhóm thành ${nextX.toLocaleString('vi-VN')} X (${nextName})!`
+                                      );
+                                    } else {
+                                      setGroupBulkFeedback(prev => ({
+                                        ...prev,
+                                        [group.id]: {
+                                          type: 'err',
+                                          text: res.error || 'Lỗi cập nhật giá trị X của nhóm.',
+                                        },
+                                      }));
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                                >
+                                  Lưu Giá Trị X
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Large TEXTAREA for pasting multiple Gift IDs into this specific X group */}
+                          <div>
+                            <div className="flex items-center justify-between text-[10px] text-stone-400 mb-1">
+                              <span>
+                                Dán nhiều ID quà TikTok cho nhóm{' '}
+                                <strong className="text-amber-300">
+                                  {group.coinValue.toLocaleString('vi-VN')} X
+                                </strong>{' '}
+                                (xuống dòng, dấu phẩy hoặc khoảng trắng):
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setGroupBulkTextareas(prev => ({
+                                    ...prev,
+                                    [group.id]: groupIds.join('\n'),
+                                  }))
+                                }
+                                className="text-sky-400 hover:underline cursor-pointer"
+                              >
+                                Nạp {groupIds.length} ID hiện tại vào ô
+                              </button>
+                            </div>
+                            <textarea
+                              data-testid={`textarea-group-ids-${group.id}`}
+                              rows={4}
+                              value={textareaVal}
+                              onChange={e =>
+                                setGroupBulkTextareas(prev => ({
+                                  ...prev,
+                                  [group.id]: e.target.value,
+                                }))
+                              }
+                              placeholder={`Ví dụ cách nhập (dán 10, 50, 100+ ID):\n5269\n15232\n5760\n9097\n6093`}
+                              className="w-full p-2 rounded bg-stone-900 border border-stone-700 font-mono text-xs text-amber-100 leading-relaxed"
+                            />
+                          </div>
+
+                          {/* Separate Action Buttons: THÊM VÀO DANH SÁCH & THAY THẾ DANH SÁCH */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              data-testid={`btn-append-group-ids-${group.id}`}
+                              type="button"
+                              onClick={async () => {
+                                const raw = (groupBulkTextareas[group.id] || '').trim();
+                                if (!raw) {
+                                  setGroupBulkFeedback(prev => ({
+                                    ...prev,
+                                    [group.id]: {
+                                      type: 'err',
+                                      text: 'Vui lòng dán ít nhất 1 Gift ID vào ô TEXTAREA trước khi bấm THÊM VÀO DANH SÁCH.',
+                                    },
+                                  }));
+                                  return;
+                                }
+                                const res = await giftRegistry.bulkAddIdsToGroup(group.id, raw);
+                                if (!res.ok) {
+                                  setGroupBulkFeedback(prev => ({
+                                    ...prev,
+                                    [group.id]: {
+                                      type: 'err',
+                                      text: res.error || 'Không thể thêm danh sách ID.',
+                                    },
+                                  }));
+                                } else {
+                                  const dupInfo =
+                                    res.check.duplicateInBatchIds.length +
+                                      res.check.alreadyInSameGroupIds.length >
+                                    0
+                                      ? ` (Đã tự lọc ${
+                                          res.check.duplicateInBatchIds.length +
+                                          res.check.alreadyInSameGroupIds.length
+                                        } ID trùng)`
+                                      : '';
+                                  const msg = `✓ Đã THÊM VÀO DANH SÁCH +${res.addedCount} ID cho nhóm ${group.coinValue.toLocaleString(
+                                    'vi-VN'
+                                  )} X${dupInfo}!`;
+                                  setGroupBulkFeedback(prev => ({
+                                    ...prev,
+                                    [group.id]: { type: 'ok', text: msg },
+                                  }));
+                                  setGroupBulkTextareas(prev => ({ ...prev, [group.id]: '' }));
+                                  notifySync(msg);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-extrabold text-[11px] cursor-pointer shadow"
+                            >
+                              ➕ THÊM VÀO DANH SÁCH
+                            </button>
+
+                            <button
+                              data-testid={`btn-replace-group-ids-${group.id}`}
+                              type="button"
+                              onClick={async () => {
+                                const raw = (groupBulkTextareas[group.id] || '').trim();
+                                if (!raw) {
+                                  setGroupBulkFeedback(prev => ({
+                                    ...prev,
+                                    [group.id]: {
+                                      type: 'err',
+                                      text: 'Vui lòng dán danh sách Gift ID mới vào ô TEXTAREA trước khi bấm THAY THẾ DANH SÁCH.',
+                                    },
+                                  }));
+                                  return;
+                                }
+                                const res = await giftRegistry.bulkReplaceIdsInGroup(group.id, raw);
+                                if (!res.ok) {
+                                  setGroupBulkFeedback(prev => ({
+                                    ...prev,
+                                    [group.id]: {
+                                      type: 'err',
+                                      text: res.error || 'Không thể thay thế danh sách ID.',
+                                    },
+                                  }));
+                                } else {
+                                  const msg = `✓ Đã THAY THẾ DANH SÁCH nhóm ${group.coinValue.toLocaleString(
+                                    'vi-VN'
+                                  )} X bằng ${res.replacedCount} ID hợp lệ!`;
+                                  setGroupBulkFeedback(prev => ({
+                                    ...prev,
+                                    [group.id]: { type: 'ok', text: msg },
+                                  }));
+                                  setGroupBulkTextareas(prev => ({ ...prev, [group.id]: '' }));
+                                  notifySync(msg);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-extrabold text-[11px] cursor-pointer shadow"
+                            >
+                              🔄 THAY THẾ DANH SÁCH
+                            </button>
+                          </div>
+
+                          {fb && (
+                            <div
+                              className={`p-2 rounded text-[11px] font-semibold ${
+                                fb.type === 'ok'
+                                  ? 'bg-emerald-950/80 border border-emerald-500/40 text-emerald-300'
+                                  : 'bg-red-950/80 border border-red-500/50 text-red-200'
+                              }`}
+                            >
+                              {fb.text}
+                            </div>
+                          )}
+
+                          {/* Quick Add Individual ID & Active ID Chips inside this group */}
+                          <div className="pt-1 border-t border-stone-800/80 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={singleDraft.giftId}
+                                onChange={e =>
+                                  setSingleAddGroupDrafts(prev => ({
+                                    ...prev,
+                                    [group.id]: { ...singleDraft, giftId: e.target.value },
+                                  }))
+                                }
+                                placeholder="Thêm 1 ID lẻ (VD: 5269)"
+                                className="w-36 px-2 py-1 rounded bg-stone-900 border border-stone-700 font-mono text-[11px]"
+                              />
+                              <input
+                                type="text"
+                                value={singleDraft.giftName}
+                                onChange={e =>
+                                  setSingleAddGroupDrafts(prev => ({
+                                    ...prev,
+                                    [group.id]: { ...singleDraft, giftName: e.target.value },
+                                  }))
+                                }
+                                placeholder="Tên quà (tùy chọn)"
+                                className="flex-1 min-w-[120px] px-2 py-1 rounded bg-stone-900 border border-stone-700 text-[11px]"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!singleDraft.giftId.trim()) return;
+                                  const res = await giftRegistry.bulkAddIdsToGroup(
+                                    group.id,
+                                    singleDraft.giftId.trim(),
+                                    singleDraft.giftName.trim() || undefined
+                                  );
+                                  if (res.ok) {
+                                    setSingleAddGroupDrafts(prev => ({
+                                      ...prev,
+                                      [group.id]: { giftId: '', giftName: '' },
+                                    }));
+                                    notifySync(
+                                      `Đã thêm ID ${singleDraft.giftId.trim()} vào nhóm ${group.coinValue} X!`
+                                    );
+                                  } else {
+                                    setGroupBulkFeedback(prev => ({
+                                      ...prev,
+                                      [group.id]: {
+                                        type: 'err',
+                                        text: res.error || 'Lỗi thêm ID lẻ.',
+                                      },
+                                    }));
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white text-[11px] font-bold cursor-pointer"
+                              >
+                                + Thêm ID Lẻ
+                              </button>
+                            </div>
+
+                            {/* Individual ID chips with quick Delete & Edit */}
+                            <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pt-0.5">
+                              {groupIds.map(idStr => {
+                                const itemMeta = group.giftItems?.[idStr];
+                                const labelName = itemMeta?.giftName || group.giftName;
+                                return (
+                                  <span
+                                    key={idStr}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-stone-900 border border-stone-700 text-[10px] font-mono text-amber-200"
+                                    title={`${labelName} (${group.coinValue} X)`}
+                                  >
+                                    <strong>{idStr}</strong>
+                                    <span className="text-stone-400 font-sans truncate max-w-[90px]">
+                                      {labelName}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        await giftRegistry.removeGiftIdFromGroup(group.id, idStr);
+                                        notifySync(
+                                          `Đã xóa ID ${idStr} khỏi nhóm ${group.coinValue} X!`
+                                        );
+                                      }}
+                                      className="text-red-400 hover:text-red-300 font-bold ml-0.5 cursor-pointer"
+                                      title={`Xóa ID ${idStr}`}
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
 
-              <textarea
-                data-testid="textarea-bulk-gift-ids"
-                rows={3}
-                value={bulkRawInput}
-                onChange={e => {
-                  setBulkRawInput(e.target.value);
-                  setBulkCheckPreview(null);
-                }}
-                placeholder="Dán danh sách Gift ID TikTok vào đây (VD: 5655, 6064, 7123, 8891 hoặc mỗi ID một dòng)..."
-                className="w-full p-2.5 rounded bg-stone-950 border border-stone-700 font-mono text-xs text-amber-100"
-              />
+              {/* A. CÔNG CỤ KIỂM TRA & DÁN HÀNG LOẠT TỔNG HỢP */}
+              <div
+                data-testid="panel-bulk-gift-ids"
+                className="p-3.5 rounded-lg bg-stone-950 border border-purple-500/40 space-y-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-purple-300 uppercase text-xs">
+                      🔍 Công Cụ Kiểm Tra Chi Tiết &amp; Dán Nhanh Theo Nhóm Chọn
+                    </div>
+                    <div className="text-[11px] text-stone-400">
+                      Kiểm tra trước số lượng ID mới, ID trùng và xung đột nhóm trước khi bấm THÊM VÀO DANH SÁCH hoặc THAY THẾ DANH SÁCH.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {giftRegistry.getAll().map(preset => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setBulkTargetGroupId(preset.id);
+                          setBulkCheckPreview(null);
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition ${
+                          bulkTargetGroupId === preset.id
+                            ? 'bg-purple-600 text-white border border-amber-300 shadow'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                        }`}
+                      >
+                        {preset.coinValue.toLocaleString('vi-VN')} X
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    data-testid="btn-inspect-bulk-gift-ids"
-                    type="button"
-                    onClick={() => {
-                      const check = giftRegistry.inspectBulkGiftIds(bulkRawInput, bulkTargetGroupId);
-                      setBulkCheckPreview(check);
-                    }}
-                    className="px-3.5 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold cursor-pointer shadow"
-                  >
-                    🔍 THÊM DANH SÁCH (Kiểm Tra Trước Khi Lưu)
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <label className="block text-[11px]">
+                    <span className="text-stone-400 block mb-1">Chọn nhóm giá trị đích:</span>
+                    <select
+                      data-testid="select-bulk-gift-group"
+                      value={bulkTargetGroupId}
+                      onChange={e => {
+                        setBulkTargetGroupId(e.target.value);
+                        setBulkCheckPreview(null);
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700 text-amber-300 font-bold"
+                    >
+                      {giftRegistry.getAll().map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.groupName || `NHÓM ${g.coinValue} X`} — {g.giftName} (
+                          {g.coinValue.toLocaleString('vi-VN')} X)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-                  {bulkCheckPreview && (
+                  <label className="block text-[11px]">
+                    <span className="text-stone-400 block mb-1">
+                      Tên quà mặc định cho các ID mới (chỉ hiển thị trong Admin):
+                    </span>
+                    <input
+                      type="text"
+                      value={bulkDefaultGiftName}
+                      onChange={e => setBulkDefaultGiftName(e.target.value)}
+                      placeholder="Để trống sẽ dùng tên nhóm quà"
+                      className="w-full px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700 text-stone-100"
+                    />
+                  </label>
+
+                  <label className="flex items-center gap-2 pt-5 cursor-pointer text-[11px]">
+                    <input
+                      type="checkbox"
+                      checked={bulkOverwriteConflicts}
+                      onChange={e => setBulkOverwriteConflicts(e.target.checked)}
+                    />
+                    <span className="text-amber-200 font-semibold">
+                      Chuyển luôn ID sang nhóm này nếu đang nằm ở nhóm giá trị khác
+                    </span>
+                  </label>
+                </div>
+
+                <textarea
+                  data-testid="textarea-bulk-gift-ids"
+                  rows={3}
+                  value={bulkRawInput}
+                  onChange={e => {
+                    setBulkRawInput(e.target.value);
+                    setBulkCheckPreview(null);
+                  }}
+                  placeholder={`Dán danh sách Gift ID TikTok vào đây (VD:\n5269\n15232\n5760\n9097\n6093\nhoặc cách nhau bằng dấu phẩy / khoảng trắng)...`}
+                  className="w-full p-2.5 rounded bg-stone-900 border border-stone-700 font-mono text-xs text-amber-100"
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      data-testid="btn-inspect-bulk-gift-ids"
+                      type="button"
+                      onClick={() => {
+                        const check = giftRegistry.inspectBulkGiftIds(
+                          bulkRawInput,
+                          bulkTargetGroupId
+                        );
+                        setBulkCheckPreview(check);
+                      }}
+                      className="px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold cursor-pointer shadow"
+                    >
+                      🔍 KIỂM TRA TRƯỚC KHI LƯU
+                    </button>
+
                     <button
                       data-testid="btn-confirm-save-bulk-gift-ids"
                       type="button"
                       onClick={async () => {
-                        if (bulkOverwriteConflicts && bulkCheckPreview.conflictOtherGroups.length > 0) {
-                          for (const c of bulkCheckPreview.conflictOtherGroups) {
-                            await giftRegistry.moveGiftIdBetweenGroups(c.giftId, c.groupId, bulkTargetGroupId);
+                        const preview =
+                          bulkCheckPreview ||
+                          giftRegistry.inspectBulkGiftIds(bulkRawInput, bulkTargetGroupId);
+                        if (bulkOverwriteConflicts && preview.conflictOtherGroups.length > 0) {
+                          for (const c of preview.conflictOtherGroups) {
+                            await giftRegistry.moveGiftIdBetweenGroups(
+                              c.giftId,
+                              c.groupId,
+                              bulkTargetGroupId
+                            );
                           }
                         }
                         const res = await giftRegistry.bulkAddIdsToGroup(
@@ -2336,396 +2785,849 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                           bulkRawInput,
                           bulkDefaultGiftName.trim() || undefined
                         );
-                        if (!res.ok && !(bulkOverwriteConflicts && bulkCheckPreview.conflictOtherGroups.length > 0)) {
-                          setGiftError(res.error || 'Lỗi lưu danh sách ID quà');
+                        if (
+                          !res.ok &&
+                          !(bulkOverwriteConflicts && preview.conflictOtherGroups.length > 0)
+                        ) {
+                          setGiftError(res.error || 'Lỗi thêm danh sách ID quà');
                         } else {
                           setGiftError(null);
                           setBulkRawInput('');
                           setBulkCheckPreview(null);
                           notifySync(
-                            `✓ Đã lưu thêm ${res.addedCount + (bulkOverwriteConflicts ? bulkCheckPreview.conflictOtherGroups.length : 0)} ID quà vào nhóm!`
+                            `✓ Đã THÊM VÀO DANH SÁCH ${
+                              res.addedCount +
+                              (bulkOverwriteConflicts ? preview.conflictOtherGroups.length : 0)
+                            } ID quà vào nhóm!`
                           );
                         }
                       }}
-                      className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold cursor-pointer shadow"
+                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold cursor-pointer shadow"
                     >
-                      💾 XÁC NHẬN LƯU ({bulkCheckPreview.validNewIds.length + (bulkOverwriteConflicts ? bulkCheckPreview.conflictOtherGroups.length : 0)} ID)
+                      ➕ THÊM VÀO DANH SÁCH
                     </button>
-                  )}
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const sample20 = Array.from({ length: 20 }, (_, i) => String(11001 + i)).join(', ');
-                    setBulkTargetGroupId('gift_tier_1');
-                    setBulkRawInput(sample20);
-                    setBulkCheckPreview(giftRegistry.inspectBulkGiftIds(sample20, 'gift_tier_1'));
-                  }}
-                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-[11px] font-semibold cursor-pointer"
-                >
-                  ⚡ Điền Mẫu 20 ID Nhóm 1 X Để Test
-                </button>
-              </div>
-
-              {bulkCheckPreview && (
-                <div
-                  data-testid="bulk-gift-preview-box"
-                  className="p-3 rounded bg-stone-950 border border-purple-500/50 space-y-1.5 text-[11px]"
-                >
-                  <div className="font-bold text-amber-300">
-                    📋 Kết Quả Kiểm Tra Danh Sách ID Trước Khi Lưu:
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono">
-                    <div className="p-1.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300">
-                      Hợp lệ mới: <strong>{bulkCheckPreview.validNewIds.length}</strong>
-                    </div>
-                    <div className="p-1.5 rounded bg-stone-900 border border-stone-700 text-stone-300">
-                      Trùng trong lần nhập: <strong>{bulkCheckPreview.duplicateInBatchIds.length}</strong>
-                    </div>
-                    <div className="p-1.5 rounded bg-sky-950/70 border border-sky-500/40 text-sky-300">
-                      Đã có trong nhóm: <strong>{bulkCheckPreview.alreadyInSameGroupIds.length}</strong>
-                    </div>
-                    <div className="p-1.5 rounded bg-amber-950/70 border border-amber-500/40 text-amber-300">
-                      Xung đột nhóm khác: <strong>{bulkCheckPreview.conflictOtherGroups.length}</strong>
-                    </div>
-                    <div className="p-1.5 rounded bg-red-950/70 border border-red-500/40 text-red-300">
-                      ID lỗi định dạng: <strong>{bulkCheckPreview.invalidTokens.length}</strong>
-                    </div>
-                  </div>
-                  {bulkCheckPreview.conflictOtherGroups.length > 0 && (
-                    <div className="text-amber-300 font-semibold">
-                      ⚠️ Cảnh báo xung đột nhóm:{' '}
-                      {bulkCheckPreview.conflictOtherGroups
-                        .map(c => `ID ${c.giftId} đang thuộc ${c.groupName} (${c.coinValue} X)`)
-                        .join(' • ')}
-                    </div>
-                  )}
-                  {bulkCheckPreview.invalidTokens.length > 0 && (
-                    <div className="text-red-300">
-                      ❌ Các chuỗi không phải ID số hợp lệ: [{bulkCheckPreview.invalidTokens.join(', ')}]
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* B. THÊM NHÓM GIÁ TRỊ QUÀ MỚI / QUÀ LẺ NGOÀI MỐC (2 X, 3 X, 30 X, 100 X, 299 X, 500 X...) */}
-            <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/30 space-y-2.5">
-              <div className="font-bold text-amber-400 uppercase">
-                🎁 Tạo Nhóm Giá Trị Quà Mới Hoặc Quà Ngoài Mốc (VD: 2 X, 3 X, 30 X, 100 X, 299 X, 500 X)
-              </div>
-              {giftError && (
-                <div className="p-2 rounded bg-red-950 border border-red-500 text-red-200 text-[11px]">
-                  ⚠️ {giftError}
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                <input
-                  type="text"
-                  value={giftNameInput}
-                  onChange={e => setGiftNameInput(e.target.value)}
-                  placeholder="Tên quà / nhóm quà (VD: Quà Lẻ 3 X)"
-                  className="px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700"
-                />
-                <input
-                  type="text"
-                  value={giftIdsInput}
-                  onChange={e => setGiftIdsInput(e.target.value)}
-                  placeholder="Gift ID (VD: 5655, 7934)"
-                  className="px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 font-mono"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  value={giftCoinsInput}
-                  onChange={e => setGiftCoinsInput(Number(e.target.value))}
-                  placeholder="Giá trị X"
-                  className="px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700 font-mono"
-                />
-                <select
-                  value={giftRankInput}
-                  onChange={e => setGiftRankInput(e.target.value as RankTierId)}
-                  className="px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700"
-                >
-                  {config.ranks.map(r => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={giftGrantsThrone}
-                    onChange={e => setGiftGrantsThrone(e.target.checked)}
-                  />
-                  <span className="text-amber-300 font-semibold">
-                    🐉 Quà Chí Tôn (Tặng quà này lập tức đoạt Ngai Vàng làm Giáo Chủ)
-                  </span>
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={async () => {
-                      setGiftError(null);
-                      const parsedIds = giftIdsInput
-                        .split(/[\n,;|\s]+/)
-                        .map(s => s.trim())
-                        .filter(Boolean);
-                      const res = await giftRegistry.createGift({
-                        giftName: giftNameInput || `Nhóm Quà ${giftCoinsInput} X`,
-                        groupName: `NHÓM ${giftCoinsInput.toLocaleString('vi-VN')} X`,
-                        giftIds: parsedIds,
-                        giftIdStrings: parsedIds,
-                        coinValue: giftCoinsInput,
-                        rankGranted: giftGrantsThrone ? 'giao_chu' : giftRankInput,
-                        grantsThrone: giftGrantsThrone || giftCoinsInput >= 199,
-                        grantsCoLeader: giftCoinsInput >= 99 && giftCoinsInput < 199 && !giftGrantsThrone,
-                      });
-                      if (!res.ok) {
-                        setGiftError(res.error || 'Lỗi thêm quà');
-                      } else {
-                        setGiftNameInput('');
-                        setGiftIdsInput('');
-                        notifySync('Đã thêm nhóm quà TikTok mới!');
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
-                  >
-                    + Thêm Nhóm / Quà Mới
-                  </button>
-                  <button
-                    onClick={() => {
-                      const jsonStr = giftRegistry.exportJson();
-                      const blob = new Blob([jsonStr], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `magiao-gifts-${Date.now()}.json`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      notifySync('Đã xuất danh sách quà ra file JSON!');
-                    }}
-                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 font-semibold cursor-pointer"
-                  >
-                    ⬇ Xuất JSON
-                  </button>
-                  <button
-                    onClick={() => {
-                      const csvStr = giftRegistry.exportCsv();
-                      const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `magiao-gifts-${Date.now()}.csv`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      notifySync('Đã xuất danh sách quà ra file CSV!');
-                    }}
-                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-emerald-300 border border-emerald-500/30 font-semibold cursor-pointer"
-                  >
-                    ⬇ Xuất CSV
-                  </button>
-                  <button
-                    onClick={() => setShowGiftImportBox(v => !v)}
-                    className="px-3 py-1.5 rounded bg-sky-800 hover:bg-sky-700 text-white font-semibold cursor-pointer"
-                  >
-                    ⬆ Nhập JSON / CSV
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await giftRegistry.resetToDefaults();
-                      notifySync('Đã khôi phục danh sách quà mặc định!');
-                    }}
-                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 cursor-pointer"
-                  >
-                    ↺ Mặc Định
-                  </button>
-                </div>
-              </div>
-
-              {showGiftImportBox && (
-                <div className="p-2.5 rounded bg-stone-950 border border-sky-500/40 space-y-2">
-                  <div className="text-sky-300 font-semibold text-[11px]">
-                    Dán nội dung JSON hoặc CSV (`giftId,giftName,coinValue,groupName,enabled`) để nhập:
-                  </div>
-                  <textarea
-                    rows={3}
-                    value={giftImportText}
-                    onChange={e => setGiftImportText(e.target.value)}
-                    placeholder="Dán JSON hoặc CSV vào đây..."
-                    className="w-full p-2 rounded bg-stone-900 border border-stone-700 font-mono text-[10px]"
-                  />
-                  <div className="flex gap-2">
                     <button
+                      data-testid="btn-confirm-replace-bulk-gift-ids"
+                      type="button"
                       onClick={async () => {
-                        const raw = giftImportText.trim();
-                        if (!raw) return;
-                        const res = raw.startsWith('[') || raw.startsWith('{')
-                          ? await giftRegistry.importJson(raw)
-                          : await giftRegistry.importCsv(raw);
+                        const preview =
+                          bulkCheckPreview ||
+                          giftRegistry.inspectBulkGiftIds(bulkRawInput, bulkTargetGroupId);
+                        if (bulkOverwriteConflicts && preview.conflictOtherGroups.length > 0) {
+                          for (const c of preview.conflictOtherGroups) {
+                            await giftRegistry.moveGiftIdBetweenGroups(
+                              c.giftId,
+                              c.groupId,
+                              bulkTargetGroupId
+                            );
+                          }
+                        }
+                        const res = await giftRegistry.bulkReplaceIdsInGroup(
+                          bulkTargetGroupId,
+                          bulkRawInput,
+                          bulkDefaultGiftName.trim() || undefined
+                        );
                         if (!res.ok) {
-                          setGiftError(res.error || 'Lỗi nhập dữ liệu quà');
+                          setGiftError(res.error || 'Lỗi thay thế danh sách ID quà');
                         } else {
                           setGiftError(null);
-                          setGiftImportText('');
-                          setShowGiftImportBox(false);
-                          notifySync('Đã nhập danh sách quà thành công!');
+                          setBulkRawInput('');
+                          setBulkCheckPreview(null);
+                          notifySync(
+                            `✓ Đã THAY THẾ DANH SÁCH nhóm bằng ${res.replacedCount} ID quà!`
+                          );
                         }
                       }}
-                      className="px-3 py-1 rounded bg-sky-600 text-white font-bold cursor-pointer"
+                      className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-extrabold cursor-pointer shadow"
                     >
-                      ✓ Xác Nhận Nhập
+                      🔄 THAY THẾ DANH SÁCH
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sample20 = Array.from({ length: 20 }, (_, i) =>
+                        String(11001 + i)
+                      ).join(', ');
+                      setBulkTargetGroupId('gift_tier_1');
+                      setBulkRawInput(sample20);
+                      setBulkCheckPreview(
+                        giftRegistry.inspectBulkGiftIds(sample20, 'gift_tier_1')
+                      );
+                    }}
+                    className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-[11px] font-semibold cursor-pointer"
+                  >
+                    ⚡ Điền Mẫu 20 ID Nhóm 1 X Để Test
+                  </button>
+                </div>
+
+                {bulkCheckPreview && (
+                  <div
+                    data-testid="bulk-gift-preview-box"
+                    className="p-3 rounded bg-stone-900 border border-purple-500/50 space-y-1.5 text-[11px]"
+                  >
+                    <div className="font-bold text-amber-300">
+                      📋 Kết Quả Kiểm Tra Danh Sách ID Trước Khi Lưu:
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono">
+                      <div className="p-1.5 rounded bg-emerald-950/70 border border-emerald-500/40 text-emerald-300">
+                        Hợp lệ mới: <strong>{bulkCheckPreview.validNewIds.length}</strong>
+                      </div>
+                      <div className="p-1.5 rounded bg-stone-950 border border-stone-700 text-stone-300">
+                        Trùng trong lần nhập:{' '}
+                        <strong>{bulkCheckPreview.duplicateInBatchIds.length}</strong>
+                      </div>
+                      <div className="p-1.5 rounded bg-sky-950/70 border border-sky-500/40 text-sky-300">
+                        Đã có trong nhóm:{' '}
+                        <strong>{bulkCheckPreview.alreadyInSameGroupIds.length}</strong>
+                      </div>
+                      <div className="p-1.5 rounded bg-amber-950/70 border border-amber-500/40 text-amber-300">
+                        Xung đột nhóm khác:{' '}
+                        <strong>{bulkCheckPreview.conflictOtherGroups.length}</strong>
+                      </div>
+                      <div className="p-1.5 rounded bg-red-950/70 border border-red-500/40 text-red-300">
+                        ID lỗi định dạng: <strong>{bulkCheckPreview.invalidTokens.length}</strong>
+                      </div>
+                    </div>
+                    {bulkCheckPreview.conflictOtherGroups.length > 0 && (
+                      <div className="text-amber-300 font-semibold">
+                        ⚠️ Cảnh báo xung đột nhóm:{' '}
+                        {bulkCheckPreview.conflictOtherGroups
+                          .map(c => `ID ${c.giftId} đang thuộc ${c.groupName} (${c.coinValue} X)`)
+                          .join(' • ')}
+                      </div>
+                    )}
+                    {bulkCheckPreview.invalidTokens.length > 0 && (
+                      <div className="text-red-300">
+                        ❌ Các chuỗi không phải ID số hợp lệ: [
+                        {bulkCheckPreview.invalidTokens.join(', ')}]
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* B. TẠO NHÓM GIÁ TRỊ QUÀ MỚI TÙY CHỈNH (2 X, 3 X, 30 X, 100 X, 500 X...) & XUẤT/NHẬP JSON/CSV */}
+              <div className="p-3 rounded-lg bg-stone-950 border border-amber-500/30 space-y-2.5">
+                <div className="font-bold text-amber-400 uppercase text-xs">
+                  ➕ Tạo Nhóm Giá Trị X Tùy Chỉnh Mới (VD: 2 X, 3 X, 30 X, 100 X, 500 X...)
+                </div>
+                {giftError && (
+                  <div className="p-2 rounded bg-red-950 border border-red-500 text-red-200 text-[11px]">
+                    ⚠️ {giftError}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={giftNameInput}
+                    onChange={e => setGiftNameInput(e.target.value)}
+                    placeholder="Tên quà quản trị (VD: Quà Lẻ 30 X)"
+                    className="px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700"
+                  />
+                  <input
+                    type="text"
+                    value={giftIdsInput}
+                    onChange={e => setGiftIdsInput(e.target.value)}
+                    placeholder="Danh sách Gift ID ban đầu (VD: 5269, 15232)"
+                    className="px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700 font-mono"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={giftCoinsInput}
+                    onChange={e => setGiftCoinsInput(Math.max(1, Number(e.target.value)))}
+                    placeholder="Giá trị X"
+                    className="px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700 font-mono text-amber-300 font-bold"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-stone-400">
+                    Mọi nhóm quà mới đều tự động có ô TEXTAREA riêng ở trên và lưu bền vững.
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={async () => {
+                        setGiftError(null);
+                        const parsedIds = giftIdsInput
+                          .split(/[\n,;|\s]+/)
+                          .map(s => s.trim())
+                          .filter(Boolean);
+                        const res = await giftRegistry.createGift({
+                          giftName: giftNameInput || `Nhóm Quà ${giftCoinsInput} X`,
+                          groupName: `NHÓM ${giftCoinsInput.toLocaleString('vi-VN')} X`,
+                          giftIds: parsedIds,
+                          giftIdStrings: parsedIds,
+                          coinValue: giftCoinsInput,
+                          rankGranted: giftCoinsInput >= 199 ? 'giao_chu' : 'de_tu',
+                          grantsThrone: giftCoinsInput >= 199,
+                          grantsCoLeader: giftCoinsInput >= 99 && giftCoinsInput < 199,
+                        });
+                        if (!res.ok) {
+                          setGiftError(res.error || 'Lỗi thêm nhóm quà');
+                        } else {
+                          setGiftNameInput('');
+                          setGiftIdsInput('');
+                          notifySync(`Đã tạo nhóm giá trị ${giftCoinsInput} X thành công!`);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
+                    >
+                      + Tạo Nhóm Giá Trị X Mới
                     </button>
                     <button
-                      onClick={() => setShowGiftImportBox(false)}
-                      className="px-3 py-1 rounded bg-stone-800 text-stone-300 cursor-pointer"
+                      onClick={() => {
+                        const jsonStr = giftRegistry.exportJson();
+                        const blob = new Blob([jsonStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `magiao-gifts-${Date.now()}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        notifySync('Đã xuất danh sách quà ra file JSON!');
+                      }}
+                      className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 font-semibold cursor-pointer"
                     >
-                      Đóng
+                      ⬇ Xuất JSON
+                    </button>
+                    <button
+                      onClick={() => {
+                        const csvStr = giftRegistry.exportCsv();
+                        const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `magiao-gifts-${Date.now()}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        notifySync('Đã xuất danh sách quà ra file CSV!');
+                      }}
+                      className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-emerald-300 border border-emerald-500/30 font-semibold cursor-pointer"
+                    >
+                      ⬇ Xuất CSV
+                    </button>
+                    <button
+                      onClick={() => setShowGiftImportBox(v => !v)}
+                      className="px-3 py-1.5 rounded bg-sky-800 hover:bg-sky-700 text-white font-semibold cursor-pointer"
+                    >
+                      ⬆ Nhập JSON / CSV
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await giftRegistry.resetToDefaults();
+                        notifySync('Đã khôi phục danh sách nhóm ID quà mặc định!');
+                      }}
+                      className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 cursor-pointer"
+                    >
+                      ↺ Mặc Định
                     </button>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* C. BẢNG QUẢN LÝ QUÀ TRONG ADMIN (SECTION VII) */}
-            <div
-              data-testid="panel-gift-management-table"
-              className="p-3.5 rounded-lg bg-stone-900 border border-amber-500/30 space-y-3"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="font-bold text-amber-400 uppercase text-xs sm:text-sm">
-                  📋 Bảng Quản Lý Quà TikTok Theo Từng ID ({giftRegistry.getFlattenedGiftItems().length} ID Quà)
-                </div>
-                <input
-                  data-testid="input-search-gift-table"
-                  type="text"
-                  value={giftTableSearch}
-                  onChange={e => setGiftTableSearch(e.target.value)}
-                  placeholder="🔍 Tìm theo ID TikTok hoặc Tên quà..."
-                  className="w-64 px-2.5 py-1 rounded bg-stone-950 border border-stone-700 text-stone-100 text-xs"
-                />
+                {showGiftImportBox && (
+                  <div className="p-2.5 rounded bg-stone-900 border border-sky-500/40 space-y-2">
+                    <div className="text-sky-300 font-semibold text-[11px]">
+                      Dán nội dung JSON hoặc CSV (`giftId,giftName,coinValue,groupName,enabled`) để nhập:
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={giftImportText}
+                      onChange={e => setGiftImportText(e.target.value)}
+                      placeholder="Dán JSON hoặc CSV vào đây..."
+                      className="w-full p-2 rounded bg-stone-950 border border-stone-700 font-mono text-[10px]"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          const raw = giftImportText.trim();
+                          if (!raw) return;
+                          const res =
+                            raw.startsWith('[') || raw.startsWith('{')
+                              ? await giftRegistry.importJson(raw)
+                              : await giftRegistry.importCsv(raw);
+                          if (!res.ok) {
+                            setGiftError(res.error || 'Lỗi nhập dữ liệu quà');
+                          } else {
+                            setGiftError(null);
+                            setGiftImportText('');
+                            setShowGiftImportBox(false);
+                            notifySync('Đã nhập danh sách quà thành công!');
+                          }
+                        }}
+                        className="px-3 py-1 rounded bg-sky-600 text-white font-bold cursor-pointer"
+                      >
+                        ✓ Xác Nhận Nhập
+                      </button>
+                      <button
+                        onClick={() => setShowGiftImportBox(false)}
+                        className="px-3 py-1 rounded bg-stone-800 text-stone-300 cursor-pointer"
+                      >
+                        Đóng
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Bộ lọc nhanh: TẤT CẢ | 1 X | 5 X | 10 X | 20 X | 50 X | 99 X | 199 X | 1.000 X */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-stone-400 mr-1">Lọc nhanh:</span>
-                {(
-                  [
-                    { val: 'ALL', label: 'TẤT CẢ' },
-                    { val: 1, label: '1 X' },
-                    { val: 5, label: '5 X' },
-                    { val: 10, label: '10 X' },
-                    { val: 20, label: '20 X' },
-                    { val: 50, label: '50 X' },
-                    { val: 99, label: '99 X' },
-                    { val: 199, label: '199 X' },
-                    { val: 1000, label: '1.000 X' },
-                  ] as const
-                ).map(f => (
+              {/* C. BẢNG TRA CỨU & SỬA/XÓA RIÊNG LẺ TỪNG ID QUÀ TIKTOK */}
+              <div
+                data-testid="panel-gift-management-table"
+                className="p-3.5 rounded-lg bg-stone-950 border border-stone-800 space-y-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-bold text-amber-400 uppercase text-xs">
+                    📋 Danh Sách Quản Trị Chi Tiết Từng ID Quà TikTok ({giftRegistry.getFlattenedGiftItems().length} ID)
+                  </div>
+                  <input
+                    data-testid="input-search-gift-table"
+                    type="text"
+                    value={giftTableSearch}
+                    onChange={e => setGiftTableSearch(e.target.value)}
+                    placeholder="🔍 Tìm theo ID TikTok hoặc Tên quà..."
+                    className="w-64 px-2.5 py-1 rounded bg-stone-900 border border-stone-700 text-stone-100 text-xs"
+                  />
+                </div>
+
+                {/* Bộ lọc nhanh theo nhóm X */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-stone-400 mr-1">Lọc nhanh theo nhóm X:</span>
                   <button
-                    key={String(f.val)}
                     type="button"
-                    onClick={() => setGiftTableValueFilter(f.val)}
+                    onClick={() => setGiftTableValueFilter('ALL')}
                     className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition ${
-                      giftTableValueFilter === f.val
+                      giftTableValueFilter === 'ALL'
                         ? 'bg-amber-500 text-black shadow'
-                        : 'bg-stone-950 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                        : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
                     }`}
                   >
-                    {f.label}
+                    TẤT CẢ
                   </button>
-                ))}
-              </div>
+                  {Array.from(new Set(giftRegistry.getAll().map(g => g.coinValue)))
+                    .sort((a, b) => a - b)
+                    .map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setGiftTableValueFilter(val)}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition ${
+                          giftTableValueFilter === val
+                            ? 'bg-amber-500 text-black shadow'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                        }`}
+                      >
+                        {val.toLocaleString('vi-VN')} X
+                      </button>
+                    ))}
+                </div>
 
-              {/* Bảng: ID TikTok | Tên quà | Giá trị | Trạng thái | Thao tác */}
-              <div className="max-h-[380px] overflow-x-auto overflow-y-auto rounded border border-stone-800">
-                <table className="w-full text-left border-collapse text-[11px] tabular-nums">
-                  <thead className="bg-stone-950 text-stone-400 sticky top-0 z-10 border-b border-stone-800">
-                    <tr>
-                      <th className="p-2">ID TikTok</th>
-                      <th className="p-2">Tên quà</th>
-                      <th className="p-2">Giá trị</th>
-                      <th className="p-2">Trạng thái</th>
-                      <th className="p-2 text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-800/70">
-                    {giftRegistry
-                      .getFlattenedGiftItems()
-                      .filter(row => {
-                        if (giftTableValueFilter !== 'ALL' && row.coinValue !== giftTableValueFilter) {
-                          return false;
-                        }
-                        if (giftTableSearch.trim()) {
-                          const q = giftTableSearch.trim().toLowerCase();
+                <div className="max-h-[320px] overflow-x-auto overflow-y-auto rounded border border-stone-800">
+                  <table className="w-full text-left border-collapse text-[11px] tabular-nums">
+                    <thead className="bg-stone-900 text-stone-400 sticky top-0 z-10 border-b border-stone-800">
+                      <tr>
+                        <th className="p-2">ID TikTok</th>
+                        <th className="p-2">Tên quà (Chỉ dùng trong Admin)</th>
+                        <th className="p-2">Giá trị X</th>
+                        <th className="p-2">Trạng thái</th>
+                        <th className="p-2 text-right">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-800/70">
+                      {giftRegistry
+                        .getFlattenedGiftItems()
+                        .filter(row => {
+                          if (
+                            giftTableValueFilter !== 'ALL' &&
+                            row.coinValue !== giftTableValueFilter
+                          ) {
+                            return false;
+                          }
+                          if (giftTableSearch.trim()) {
+                            const q = giftTableSearch.trim().toLowerCase();
+                            return (
+                              row.giftId.toLowerCase().includes(q) ||
+                              row.giftName.toLowerCase().includes(q) ||
+                              row.groupName.toLowerCase().includes(q)
+                            );
+                          }
+                          return true;
+                        })
+                        .map(row => {
+                          const rowKey = `${row.groupId}:${row.giftId}`;
+                          const isEditing = editingGiftIdKey === rowKey;
+                          const isMoving = movingGiftIdKey === rowKey;
+
                           return (
-                            row.giftId.toLowerCase().includes(q) ||
-                            row.giftName.toLowerCase().includes(q) ||
-                            row.groupName.toLowerCase().includes(q)
-                          );
-                        }
-                        return true;
-                      })
-                      .map(row => {
-                        const rowKey = `${row.groupId}:${row.giftId}`;
-                        const isEditing = editingGiftIdKey === rowKey;
-                        const isMoving = movingGiftIdKey === rowKey;
-
-                        return (
-                          <tr key={rowKey} className="bg-stone-900/70 hover:bg-stone-800/70">
-                            <td className="p-2 font-mono font-bold text-amber-300">
-                              <code>{row.giftId}</code>
-                            </td>
-                            <td className="p-2">
-                              {isEditing ? (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="text"
-                                    value={editingGiftNameDraft}
-                                    onChange={e => setEditingGiftNameDraft(e.target.value)}
-                                    className="px-2 py-0.5 rounded bg-stone-950 border border-amber-500 text-stone-100 text-xs"
-                                  />
+                            <tr key={rowKey} className="bg-stone-950/70 hover:bg-stone-900">
+                              <td className="p-2 font-mono font-bold text-amber-300">
+                                <code>{row.giftId}</code>
+                              </td>
+                              <td className="p-2">
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="text"
+                                      value={editingGiftNameDraft}
+                                      onChange={e => setEditingGiftNameDraft(e.target.value)}
+                                      className="px-2 py-0.5 rounded bg-stone-900 border border-amber-500 text-stone-100 text-xs"
+                                    />
+                                    <button
+                                      onClick={async () => {
+                                        await giftRegistry.updateGiftItemMetadata(
+                                          row.groupId,
+                                          row.giftId,
+                                          {
+                                            giftName:
+                                              editingGiftNameDraft.trim() || row.giftName,
+                                          }
+                                        );
+                                        setEditingGiftIdKey(null);
+                                        notifySync(`Đã cập nhật tên quà quản trị cho ID ${row.giftId}!`);
+                                      }}
+                                      className="px-2 py-0.5 rounded bg-emerald-700 text-white font-bold cursor-pointer"
+                                    >
+                                      Lưu
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingGiftIdKey(null)}
+                                      className="px-2 py-0.5 rounded bg-stone-700 text-stone-200 cursor-pointer"
+                                    >
+                                      Hủy
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <span className="font-semibold text-stone-100">
+                                      {row.giftName}
+                                    </span>
+                                    <span className="ml-2 text-[10px] text-stone-400">
+                                      ({row.groupName})
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-2 font-mono font-bold text-emerald-400">
+                                {row.coinValue.toLocaleString('vi-VN')} X
+                              </td>
+                              <td className="p-2">
+                                <button
+                                  onClick={async () => {
+                                    await giftRegistry.updateGiftItemMetadata(
+                                      row.groupId,
+                                      row.giftId,
+                                      {
+                                        enabled: !row.enabled,
+                                      }
+                                    );
+                                    notifySync(
+                                      `Đã ${!row.enabled ? 'BẬT' : 'TẮT'} ID quà ${row.giftId}!`
+                                    );
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                    row.enabled
+                                      ? 'bg-emerald-950 border border-emerald-500/40 text-emerald-300'
+                                      : 'bg-stone-800 border border-stone-600 text-stone-400'
+                                  }`}
+                                >
+                                  {row.enabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                                </button>
+                              </td>
+                              <td className="p-2 text-right">
+                                <div className="flex flex-wrap items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => {
+                                      const evt: TikTokLiveEvent = {
+                                        id: `test_id_${row.giftId}_${Date.now()}`,
+                                        type: 'gift',
+                                        timestamp: Date.now(),
+                                        userId: selectedDisciple?.userId || 'demo_gifter_01',
+                                        uniqueId: selectedDisciple?.uniqueId || 'demo_gifter_01',
+                                        nickname:
+                                          selectedDisciple?.displayName || 'Lệnh Hồ Xung',
+                                        giftId: row.giftId,
+                                        giftName: row.giftName,
+                                        giftCount: 1,
+                                        coinValue: row.coinValue,
+                                        isDemo: true,
+                                      };
+                                      const res = sectGameManager.handleGiftEvent(evt);
+                                      liveConnectionManager.emitAdminCommand({
+                                        action: 'test_live_event',
+                                        event: evt,
+                                      });
+                                      notifySync(
+                                        `Test ID ${row.giftId} ➔ ${res.disciple.displayName}: +${res.addedCoins} X (Tổng: ${res.disciple.totalCoins} X • Cấp bậc Phong Ấn: ${res.newRankName})`
+                                      );
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold cursor-pointer"
+                                  >
+                                    Test
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingGiftIdKey(rowKey);
+                                      setEditingGiftNameDraft(row.giftName);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 cursor-pointer"
+                                  >
+                                    Sửa Tên
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setMovingGiftIdKey(isMoving ? null : rowKey);
+                                      const otherGroup = giftRegistry
+                                        .getAll()
+                                        .find(g => g.id !== row.groupId);
+                                      if (otherGroup) setMovingTargetGroupId(otherGroup.id);
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 cursor-pointer"
+                                  >
+                                    Chuyển Nhóm
+                                  </button>
                                   <button
                                     onClick={async () => {
-                                      await giftRegistry.updateGiftItemMetadata(row.groupId, row.giftId, {
-                                        giftName: editingGiftNameDraft.trim() || row.giftName,
-                                      });
-                                      setEditingGiftIdKey(null);
-                                      notifySync(`Đã cập nhật tên quà cho ID ${row.giftId}!`);
+                                      await giftRegistry.removeGiftIdFromGroup(
+                                        row.groupId,
+                                        row.giftId
+                                      );
+                                      notifySync(
+                                        `Đã xóa ID ${row.giftId} khỏi ${row.groupName}!`
+                                      );
                                     }}
-                                    className="px-2 py-0.5 rounded bg-emerald-700 text-white font-bold cursor-pointer"
+                                    className="px-2 py-0.5 rounded bg-red-900/80 hover:bg-red-800 text-red-200 cursor-pointer"
                                   >
-                                    Lưu
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingGiftIdKey(null)}
-                                    className="px-2 py-0.5 rounded bg-stone-700 text-stone-200 cursor-pointer"
-                                  >
-                                    Hủy
+                                    Xóa
                                   </button>
                                 </div>
+                                {isMoving && (
+                                  <div className="mt-1.5 flex items-center justify-end gap-1">
+                                    <select
+                                      value={movingTargetGroupId}
+                                      onChange={e => setMovingTargetGroupId(e.target.value)}
+                                      className="px-2 py-0.5 rounded bg-stone-900 border border-purple-500 text-amber-200 text-[10px]"
+                                    >
+                                      {giftRegistry
+                                        .getAll()
+                                        .filter(g => g.id !== row.groupId)
+                                        .map(g => (
+                                          <option key={g.id} value={g.id}>
+                                            {g.groupName || `NHÓM ${g.coinValue} X`} ({g.coinValue}{' '}
+                                            X)
+                                          </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                      onClick={async () => {
+                                        const res = await giftRegistry.moveGiftIdBetweenGroups(
+                                          row.giftId,
+                                          row.groupId,
+                                          movingTargetGroupId
+                                        );
+                                        if (res.ok) {
+                                          setMovingGiftIdKey(null);
+                                          notifySync(
+                                            `Đã chuyển ID ${row.giftId} sang nhóm mới!`
+                                          );
+                                        }
+                                      }}
+                                      className="px-2 py-0.5 rounded bg-purple-600 text-white font-bold cursor-pointer"
+                                    >
+                                      Xác Nhận Chuyển
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* ==============================================================
+                KHU VỰC 2: 2. CHỈNH SỬA BẢNG PHONG ẤN (HIỂN THỊ LIVE & MỐC THĂNG CẤP)
+               ============================================================== */}
+            <div
+              data-testid="section-phong-an-editor"
+              className="p-4 rounded-xl bg-stone-900/95 border-2 border-amber-500/50 space-y-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800 pb-2.5">
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-amber-300 uppercase tracking-wide">
+                    2. CHỈNH SỬA BẢNG PHONG ẤN (HIỂN THỊ TRÊN LIVE &amp; ĐIỀU KIỆN PHONG CẤP)
+                  </h3>
+                  <p className="text-[11px] text-stone-300">
+                    Bảng <strong>PHONG ẤN</strong> ngoài màn hình LIVE chỉ hiển thị: <strong>Icon SVG Ma Giáo + Số X + Tên cấp bậc / Sự kiện</strong> (không hiển thị ID quà, tên quà hay icon quà TikTok). Sửa tên cấp bậc hoặc mốc X tại đây sẽ cập nhật ngay lên LIVE và logic thăng cấp mà không làm thay đổi giá trị X của các ID quà.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    data-testid="btn-toggle-add-phong-an-rank"
+                    type="button"
+                    onClick={() => setShowAddPhongAnRankBox(v => !v)}
+                    className="px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold cursor-pointer shadow"
+                  >
+                    + Thêm Cấp Bậc Mới
+                  </button>
+                  <button
+                    data-testid="btn-save-phong-an-live"
+                    type="button"
+                    onClick={() => {
+                      updateAndSyncConfig(d => {
+                        d.ranks = sectGameManager.getConfig().ranks;
+                        d.dietMonConfig = sectGameManager.getConfig().dietMonConfig;
+                      }, '✓ Đã lưu BẢNG PHONG ẤN và cập nhật ngay lên màn hình LIVE & OBS!');
+                    }}
+                    className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold cursor-pointer shadow-lg"
+                  >
+                    💾 LƯU THAY ĐỔI &amp; CẬP NHẬT LIVE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sectGameManager.resetRanksToDefault();
+                      updateAndSyncConfig(d => {
+                        d.ranks = sectGameManager.getConfig().ranks;
+                        d.dietMonConfig = sectGameManager.getConfig().dietMonConfig;
+                      }, 'Đã khôi phục mặc định BẢNG PHONG ẤN (1 X..199 X & 1.000 X DIỆT MÔN)!');
+                    }}
+                    className="px-2.5 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 text-xs cursor-pointer"
+                  >
+                    ↺ Khôi Phục Mặc Định
+                  </button>
+                </div>
+              </div>
+
+              {/* Box thêm cấp bậc mới vào BẢNG PHONG ẤN */}
+              {showAddPhongAnRankBox && (
+                <div
+                  data-testid="box-add-phong-an-rank"
+                  className="p-3 rounded-lg bg-stone-950 border border-purple-500/50 space-y-2"
+                >
+                  <div className="font-bold text-purple-300 text-xs">
+                    ➕ Thêm Cấp Bậc Mới Vào Bảng PHONG ẤN &amp; Hệ Thống Phong Cấp
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <label className="block text-[11px]">
+                      <span className="text-stone-400 block mb-1">Mốc X cần đạt:</span>
+                      <input
+                        data-testid="input-new-phong-an-coins"
+                        type="number"
+                        min={1}
+                        value={newPhongAnRankCoins}
+                        onChange={e => setNewPhongAnRankCoins(Math.max(1, Number(e.target.value)))}
+                        className="w-full px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700 font-mono text-amber-300 font-bold"
+                      />
+                    </label>
+                    <label className="block text-[11px]">
+                      <span className="text-stone-400 block mb-1">Tên cấp bậc hiển thị trên PHONG ẤN:</span>
+                      <input
+                        data-testid="input-new-phong-an-name"
+                        type="text"
+                        value={newPhongAnRankName}
+                        onChange={e => setNewPhongAnRankName(e.target.value)}
+                        placeholder="VD: Thái Thượng Trưởng Lão"
+                        className="w-full px-2.5 py-1.5 rounded bg-stone-900 border border-stone-700 text-stone-100"
+                      />
+                    </label>
+                    <div className="flex items-end gap-2">
+                      <button
+                        data-testid="btn-confirm-add-phong-an-rank"
+                        type="button"
+                        onClick={() => {
+                          if (!newPhongAnRankName.trim()) {
+                            notifySync('Vui lòng nhập tên cấp bậc mới!');
+                            return;
+                          }
+                          const created = sectGameManager.addPhongAnRankRow({
+                            minCoins: newPhongAnRankCoins,
+                            name: newPhongAnRankName.trim(),
+                            enabled: true,
+                          });
+                          updateAndSyncConfig(d => {
+                            d.ranks = sectGameManager.getConfig().ranks;
+                          }, `✓ Đã thêm cấp bậc "${created.name}" (${created.minCoins} X) vào bảng PHONG ẤN!`);
+                          setNewPhongAnRankName('');
+                          setShowAddPhongAnRankBox(false);
+                        }}
+                        className="px-3.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                      >
+                        ✓ Thêm Vào Bảng PHONG ẤN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPhongAnRankBox(false)}
+                        className="px-2.5 py-1.5 rounded bg-stone-800 text-stone-300 cursor-pointer"
+                      >
+                        Đóng
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Grid 2 Cột: Cột Trái = Bảng chỉnh sửa trực tiếp | Cột Phải = XEM TRƯỚC BẢNG PHONG ẤN LIVE */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                {/* Cột Trái (2/3): Bảng chỉnh sửa trực tiếp | Mốc X | Tên cấp bậc / Sự kiện | Thứ tự | Bật/Tắt | Chỉnh sửa | */}
+                <div className="lg:col-span-2 overflow-x-auto rounded-lg border border-stone-800 bg-stone-950">
+                  <table
+                    data-testid="table-phong-an-editor"
+                    className="w-full text-left border-collapse text-xs tabular-nums"
+                  >
+                    <thead className="bg-stone-900 text-stone-300 border-b border-stone-800">
+                      <tr>
+                        <th className="p-2.5">Mốc X</th>
+                        <th className="p-2.5">Tên cấp bậc / Sự kiện</th>
+                        <th className="p-2.5">Thứ tự</th>
+                        <th className="p-2.5">Hiển thị</th>
+                        <th className="p-2.5 text-right">Chỉnh sửa</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-800/80">
+                      {sectGameManager.getPhongAnDisplayRows(true).map((row, idx, arr) => {
+                        const isEditingRow = editingPhongAnRowId === row.id;
+
+                        return (
+                          <tr
+                            key={row.id}
+                            data-testid={`phong-an-row-${row.id}`}
+                            className={`${
+                              row.isDietMon
+                                ? 'bg-red-950/30 hover:bg-red-950/50'
+                                : 'bg-stone-950 hover:bg-stone-900/80'
+                            } ${!row.enabled ? 'opacity-50' : ''}`}
+                          >
+                            {/* Mốc X */}
+                            <td className="p-2.5 font-mono font-bold text-amber-300">
+                              {isEditingRow ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    data-testid={`input-phong-an-coins-${row.id}`}
+                                    type="number"
+                                    min={1}
+                                    value={phongAnDraftCoins}
+                                    onChange={e =>
+                                      setPhongAnDraftCoins(Math.max(1, Number(e.target.value)))
+                                    }
+                                    className="w-20 px-2 py-1 rounded bg-stone-900 border border-amber-500 text-amber-300 font-mono font-bold text-xs"
+                                  />
+                                  <span>X</span>
+                                </div>
                               ) : (
-                                <div>
-                                  <span className="font-semibold text-stone-100">{row.giftName}</span>
-                                  <span className="ml-2 text-[10px] text-stone-400">({row.groupName})</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <MaGiaoRankEmblemSVG
+                                    coreColor={row.isDietMon ? '#DC2626' : '#F59E0B'}
+                                    flameColor={row.isDietMon ? '#FACC15' : '#A855F7'}
+                                    isApocalypse={row.isDietMon}
+                                  />
+                                  <span>{row.minCoins.toLocaleString('vi-VN')} X</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Tên cấp bậc / Sự kiện */}
+                            <td className="p-2.5">
+                              {isEditingRow ? (
+                                <input
+                                  data-testid={`input-phong-an-name-${row.id}`}
+                                  type="text"
+                                  value={phongAnDraftName}
+                                  onChange={e => setPhongAnDraftName(e.target.value)}
+                                  className="w-full px-2 py-1 rounded bg-stone-900 border border-amber-500 text-stone-100 font-bold text-xs"
+                                />
+                              ) : (
+                                <span
+                                  className={`font-bold ${
+                                    row.isDietMon ? 'text-red-400' : 'text-stone-100'
+                                  }`}
+                                >
+                                  {row.title}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Thứ tự hiển thị */}
+                            <td className="p-2.5 font-mono text-[11px]">
+                              {isEditingRow ? (
+                                <input
+                                  type="number"
+                                  value={phongAnDraftOrder}
+                                  onChange={e => setPhongAnDraftOrder(Number(e.target.value))}
+                                  className="w-16 px-2 py-1 rounded bg-stone-900 border border-stone-700 text-stone-200 font-mono text-xs"
+                                />
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-stone-400">#{idx + 1}</span>
+                                  <button
+                                    type="button"
+                                    disabled={idx === 0}
+                                    onClick={() => {
+                                      if (idx === 0) return;
+                                      const prevRow = arr[idx - 1];
+                                      const curOrder = row.displayOrder;
+                                      const prevOrder = prevRow.displayOrder;
+                                      sectGameManager.updatePhongAnRow(row.id, {
+                                        displayOrder: prevOrder - 1,
+                                      });
+                                      sectGameManager.updatePhongAnRow(prevRow.id, {
+                                        displayOrder: curOrder + 1,
+                                      });
+                                      updateAndSyncConfig(d => {
+                                        d.ranks = sectGameManager.getConfig().ranks;
+                                        d.dietMonConfig = sectGameManager.getConfig().dietMonConfig;
+                                      }, `Đã chuyển "${row.title}" lên trên!`);
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-stone-200 cursor-pointer"
+                                    title="Đưa lên trên"
+                                  >
+                                    ▲
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={idx === arr.length - 1}
+                                    onClick={() => {
+                                      if (idx === arr.length - 1) return;
+                                      const nextRow = arr[idx + 1];
+                                      const curOrder = row.displayOrder;
+                                      const nextOrder = nextRow.displayOrder;
+                                      sectGameManager.updatePhongAnRow(row.id, {
+                                        displayOrder: nextOrder + 1,
+                                      });
+                                      sectGameManager.updatePhongAnRow(nextRow.id, {
+                                        displayOrder: curOrder - 1,
+                                      });
+                                      updateAndSyncConfig(d => {
+                                        d.ranks = sectGameManager.getConfig().ranks;
+                                        d.dietMonConfig = sectGameManager.getConfig().dietMonConfig;
+                                      }, `Đã chuyển "${row.title}" xuống dưới!`);
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-stone-200 cursor-pointer"
+                                    title="Đưa xuống dưới"
+                                  >
+                                    ▼
+                                  </button>
                                 </div>
                               )}
                             </td>
-                            <td className="p-2 font-mono font-bold text-emerald-400">
-                              {row.coinValue.toLocaleString('vi-VN')} X
-                            </td>
-                            <td className="p-2">
+
+                            {/* Bật/Tắt từng dòng */}
+                            <td className="p-2.5">
                               <button
-                                onClick={async () => {
-                                  await giftRegistry.updateGiftItemMetadata(row.groupId, row.giftId, {
+                                data-testid={`btn-toggle-phong-an-row-${row.id}`}
+                                type="button"
+                                onClick={() => {
+                                  sectGameManager.updatePhongAnRow(row.id, {
                                     enabled: !row.enabled,
                                   });
-                                  notifySync(
-                                    `Đã ${!row.enabled ? 'BẬT' : 'TẮT'} ID quà ${row.giftId}!`
-                                  );
+                                  updateAndSyncConfig(d => {
+                                    d.ranks = sectGameManager.getConfig().ranks;
+                                    d.dietMonConfig = sectGameManager.getConfig().dietMonConfig;
+                                  }, `Đã ${!row.enabled ? 'BẬT' : 'TẮT'} dòng "${row.title}" trên bảng PHONG ẤN!`);
                                 }}
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
                                   row.enabled
@@ -2733,108 +3635,147 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                                     : 'bg-stone-800 border border-stone-600 text-stone-400'
                                 }`}
                               >
-                                {row.enabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                                {row.enabled ? 'HIỆN' : 'ẨN'}
                               </button>
                             </td>
-                            <td className="p-2 text-right">
-                              <div className="flex flex-wrap items-center justify-end gap-1">
+
+                            {/* Nút Sửa / Lưu */}
+                            <td className="p-2.5 text-right">
+                              {isEditingRow ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    data-testid={`btn-save-phong-an-row-${row.id}`}
+                                    type="button"
+                                    onClick={() => {
+                                      sectGameManager.updatePhongAnRow(row.id, {
+                                        minCoins: phongAnDraftCoins,
+                                        name: phongAnDraftName.trim() || row.title,
+                                        displayOrder: phongAnDraftOrder,
+                                        enabled: phongAnDraftEnabled,
+                                      });
+                                      setEditingPhongAnRowId(null);
+                                      updateAndSyncConfig(d => {
+                                        d.ranks = sectGameManager.getConfig().ranks;
+                                        d.dietMonConfig = sectGameManager.getConfig().dietMonConfig;
+                                      }, `✓ Đã cập nhật "${phongAnDraftName.trim() || row.title}" (${phongAnDraftCoins} X) lên bảng PHONG ẤN & LIVE!`);
+                                    }}
+                                    className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                                  >
+                                    Lưu
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingPhongAnRowId(null)}
+                                    className="px-2 py-1 rounded bg-stone-700 text-stone-200 cursor-pointer"
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              ) : (
                                 <button
+                                  data-testid={`btn-edit-phong-an-row-${row.id}`}
+                                  type="button"
                                   onClick={() => {
-                                    const evt: TikTokLiveEvent = {
-                                      id: `test_id_${row.giftId}_${Date.now()}`,
-                                      type: 'gift',
-                                      timestamp: Date.now(),
-                                      userId: selectedDisciple?.userId || 'demo_gifter_01',
-                                      uniqueId: selectedDisciple?.uniqueId || 'demo_gifter_01',
-                                      nickname: selectedDisciple?.displayName || 'Lệnh Hồ Xung',
-                                      giftId: row.giftId,
-                                      giftName: row.giftName,
-                                      giftCount: 1,
-                                      coinValue: row.coinValue,
-                                      isDemo: true,
-                                    };
-                                    const res = sectGameManager.handleGiftEvent(evt);
-                                    liveConnectionManager.emitAdminCommand({
-                                      action: 'test_live_event',
-                                      event: evt,
-                                    });
-                                    notifySync(
-                                      `Test ID ${row.giftId} (${row.giftName}) ➔ ${res.disciple.displayName}: +${res.addedCoins} X (Tổng: ${res.disciple.totalCoins} X • ${res.newRankName})`
-                                    );
+                                    setEditingPhongAnRowId(row.id);
+                                    setPhongAnDraftCoins(row.minCoins);
+                                    setPhongAnDraftName(row.title);
+                                    setPhongAnDraftOrder(row.displayOrder);
+                                    setPhongAnDraftEnabled(row.enabled);
                                   }}
-                                  className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold cursor-pointer"
-                                >
-                                  Test
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingGiftIdKey(rowKey);
-                                    setEditingGiftNameDraft(row.giftName);
-                                  }}
-                                  className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 cursor-pointer"
+                                  className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold cursor-pointer"
                                 >
                                   Sửa
                                 </button>
-                                <button
-                                  onClick={() => {
-                                    setMovingGiftIdKey(isMoving ? null : rowKey);
-                                    const otherGroup = giftRegistry.getAll().find(g => g.id !== row.groupId);
-                                    if (otherGroup) setMovingTargetGroupId(otherGroup.id);
-                                  }}
-                                  className="px-2 py-0.5 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 cursor-pointer"
-                                >
-                                  Chuyển Nhóm
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    await giftRegistry.removeGiftIdFromGroup(row.groupId, row.giftId);
-                                    notifySync(`Đã xóa ID ${row.giftId} khỏi ${row.groupName}!`);
-                                  }}
-                                  className="px-2 py-0.5 rounded bg-red-900/80 hover:bg-red-800 text-red-200 cursor-pointer"
-                                >
-                                  Xóa
-                                </button>
-                              </div>
-                              {isMoving && (
-                                <div className="mt-1.5 flex items-center justify-end gap-1">
-                                  <select
-                                    value={movingTargetGroupId}
-                                    onChange={e => setMovingTargetGroupId(e.target.value)}
-                                    className="px-2 py-0.5 rounded bg-stone-950 border border-purple-500 text-amber-200 text-[10px]"
-                                  >
-                                    {giftRegistry
-                                      .getAll()
-                                      .filter(g => g.id !== row.groupId)
-                                      .map(g => (
-                                        <option key={g.id} value={g.id}>
-                                          {g.groupName || `NHÓM ${g.coinValue} X`} ({g.coinValue} X)
-                                        </option>
-                                      ))}
-                                  </select>
-                                  <button
-                                    onClick={async () => {
-                                      const res = await giftRegistry.moveGiftIdBetweenGroups(
-                                        row.giftId,
-                                        row.groupId,
-                                        movingTargetGroupId
-                                      );
-                                      if (res.ok) {
-                                        setMovingGiftIdKey(null);
-                                        notifySync(`Đã chuyển ID ${row.giftId} sang nhóm mới!`);
-                                      }
-                                    }}
-                                    className="px-2 py-0.5 rounded bg-purple-600 text-white font-bold cursor-pointer"
-                                  >
-                                    Xác Nhận Chuyển
-                                  </button>
-                                </div>
                               )}
                             </td>
                           </tr>
                         );
                       })}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Cột Phải (1/3): XEM TRƯỚC BẢNG PHONG ẤN TRÊN MÀN HÌNH LIVE */}
+                <div className="p-3.5 rounded-lg bg-stone-950 border border-amber-500/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-amber-300 uppercase">
+                      👁️ XEM TRƯỚC BẢNG PHONG ẤN (LIVE 9:16)
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      Alpha nền: {(config.overlayConfig.panelBgOpacity ?? 0.4).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Bản xem trước chuẩn xác 100% như trên màn hình LIVE */}
+                  <div
+                    data-testid="phong-an-live-preview"
+                    className="mx-auto w-full max-w-[230px] rounded-lg border border-[#D4AF37]/70 p-2.5 shadow-lg"
+                    style={{
+                      backgroundColor: `rgba(12, 8, 22, ${config.overlayConfig.panelBgOpacity ?? 0.4})`,
+                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.96), 0 0 6px rgba(0, 0, 0, 0.85)',
+                    }}
+                  >
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300 border-b border-amber-400/35 pb-1 mb-1.5 flex items-center gap-1">
+                      <MaGiaoRankEmblemSVG coreColor="#EF4444" flameColor="#F59E0B" />
+                      <span>PHONG ẤN</span>
+                    </div>
+                    <div className="space-y-1 text-[11px] leading-snug tabular-nums font-semibold">
+                      {sectGameManager.getPhongAnDisplayRows(false).map(row => (
+                        <div
+                          key={row.id}
+                          className={`flex items-center justify-between ${
+                            row.isDietMon
+                              ? 'text-red-200 font-bold pt-1 border-t border-amber-400/40'
+                              : 'text-white'
+                          }`}
+                        >
+                          <span
+                            className={`flex items-center font-mono shrink-0 ${
+                              row.isDietMon ? 'text-yellow-300' : 'text-amber-100'
+                            }`}
+                          >
+                            <MaGiaoRankEmblemSVG
+                              coreColor={
+                                row.isDietMon
+                                  ? '#DC2626'
+                                  : row.minCoins >= 199
+                                  ? '#EF4444'
+                                  : row.minCoins >= 99
+                                  ? '#F59E0B'
+                                  : '#10B981'
+                              }
+                              flameColor={row.isDietMon || row.minCoins >= 199 ? '#FACC15' : '#A855F7'}
+                              isApocalypse={row.isDietMon}
+                            />
+                            {row.minCoins.toLocaleString('vi-VN')} X
+                          </span>
+                          <span
+                            className={`truncate ml-2 ${
+                              row.isDietMon
+                                ? 'text-red-400'
+                                : row.minCoins >= 199
+                                ? 'text-yellow-300 font-bold'
+                                : row.minCoins >= 99
+                                ? 'text-amber-300 font-bold'
+                                : 'text-emerald-300'
+                            }`}
+                          >
+                            {row.title}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-stone-400 space-y-1 pt-1 border-t border-stone-800">
+                    <div>
+                      ✅ Chỉ hiển thị: <strong>Icon SVG Ma Giáo + Số X + Tên cấp bậc / Sự kiện</strong>.
+                    </div>
+                    <div>
+                      🚫 Tuyệt đối không hiển thị ID quà, tên quà TikTok hay chữ "xu".
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

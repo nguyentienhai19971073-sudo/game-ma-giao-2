@@ -247,6 +247,25 @@ async function startServer() {
     });
   });
 
+  app.post('/api/gifts/:id/bulk-replace', (req, res) => {
+    const rawInput = req.body?.rawInput ?? req.body?.giftIds ?? '';
+    const defaultItemName = req.body?.defaultItemName ? String(req.body.defaultItemName) : undefined;
+    const result = giftStore.bulkReplaceGroupIds(req.params.id, rawInput, defaultItemName);
+    if (!result.ok) {
+      res.status(400).json({ ok: false, error: result.error, check: result.check });
+      return;
+    }
+    const mappings = giftStore.getAll();
+    io.emit('gifts:updated', mappings);
+    res.json({
+      ok: true,
+      replacedCount: result.replacedCount,
+      check: result.check,
+      record: result.record,
+      mappings,
+    });
+  });
+
   app.post('/api/gifts/move-id', (req, res) => {
     const giftId = req.body?.giftId;
     const fromGroupId = String(req.body?.fromGroupId || '');

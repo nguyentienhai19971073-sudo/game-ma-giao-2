@@ -322,6 +322,111 @@ export class GiftRegistry {
     };
   }
 
+  public async bulkReplaceIdsInGroup(
+    targetGroupId: string,
+    rawInput: string | (string | number)[],
+    defaultItemName?: string
+  ): Promise<{
+    ok: boolean;
+    replacedCount: number;
+    check: BulkGiftIdCheckResult;
+    error?: string;
+  }> {
+    const localCheck = this.inspectBulkGiftIds(rawInput, targetGroupId);
+    if (localCheck.conflictOtherGroups.length > 0) {
+      const c = localCheck.conflictOtherGroups[0];
+      return {
+        ok: false,
+        replacedCount: 0,
+        check: localCheck,
+        error: `Phát hiện ${localCheck.conflictOtherGroups.length} ID đã tồn tại ở nhóm khác (VD: ID ${c.giftId} thuộc ${c.groupName} - ${c.coinValue} X). Không để cùng một ID hoạt động ở nhiều nhóm giá trị khác nhau.`,
+      };
+    }
+
+    const idx = this.mappings.findIndex(m => m.id === targetGroupId);
+    if (idx === -1) {
+      return {
+        ok: false,
+        replacedCount: 0,
+        check: localCheck,
+        error: `Không tìm thấy nhóm quà "${targetGroupId}".`,
+      };
+    }
+
+    const tokens = Array.isArray(rawInput)
+      ? rawInput.map(x => String(x).trim()).filter(Boolean)
+      : tokenizeClientBulkGiftIds(rawInput);
+    const orderedValidIds: string[] = [];
+    const seen = new Set<string>();
+    for (const token of tokens) {
+      if (/^\d+$/.test(token) && !/^0+$/.test(token)) {
+        const cleanId = token.replace(/^0+/, '');
+        if (!seen.has(cleanId)) {
+          seen.add(cleanId);
+          orderedValidIds.push(cleanId);
+        }
+      }
+    }
+
+    if (orderedValidIds.length === 0) {
+      return {
+        ok: false,
+        replacedCount: 0,
+        check: localCheck,
+        error: 'Không có Gift ID hợp lệ nào để thay thế danh sách.',
+      };
+    }
+
+    const group = this.mappings[idx];
+    const prevItems = group.giftItems || {};
+    const nextItems: Record<string, GiftItemMetadata> = {};
+    for (const idStr of orderedValidIds) {
+      if (prevItems[idStr]) {
+        nextItems[idStr] = { ...prevItems[idStr], giftId: idStr };
+      } else {
+        nextItems[idStr] = {
+          giftId: idStr,
+          giftName: (defaultItemName && defaultItemName.trim()) || group.giftName,
+          enabled: true,
+        };
+      }
+    }
+    const nextNums = orderedValidIds.map(Number).filter(n => Number.isFinite(n) && n > 0);
+
+    this.mappings[idx] = {
+      ...group,
+      giftIdStrings: orderedValidIds,
+      giftIds: nextNums,
+      giftId: nextNums[0],
+      giftItems: nextItems,
+      updatedAt: new Date().toISOString(),
+    };
+    this.notify();
+
+    try {
+      if (typeof fetch !== 'undefined') {
+        const resp = await fetch(`/api/gifts/${targetGroupId}/bulk-replace`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawInput: orderedValidIds, defaultItemName }),
+        });
+        const data = await resp.json();
+        if (resp.ok && data.ok && Array.isArray(data.mappings)) {
+          this.mappings = data.mappings;
+          this.notify();
+        }
+      }
+    } catch {
+      // Node test environment fallback
+    }
+
+    return {
+      ok: true,
+      replacedCount: orderedValidIds.length,
+      check: localCheck,
+    };
+  }
+
   public async moveGiftIdBetweenGroups(
     giftIdInput: string | number,
     fromGroupId: string,

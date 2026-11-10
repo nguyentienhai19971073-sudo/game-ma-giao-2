@@ -2059,6 +2059,201 @@ runTest(67, 'Xuất/Nhập CSV và JSON danh sách ID quà TikTok bảo toàn d�
   return 'Xuất/Nhập CSV & JSON hoạt động chính xác và bảo toàn toàn bộ ID quà hiện có.';
 });
 
+// ============================================================================
+// 68. QUẢN LÝ ID QUÀ TIKTOK: DÁN NHIỀU ID, THÊM VÀO DANH SÁCH & THAY THẾ DANH SÁCH
+// ============================================================================
+runTest(68, 'Quản lý ID quà TikTok theo nhóm X: THÊM VÀO DANH SÁCH, THAY THẾ DANH SÁCH, chống trùng & chỉnh giá trị X', () => {
+  const tmpGiftFile = path.resolve(process.cwd(), 'data', 'test_replace_gifts.json');
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  const store = new PersistentGiftStore(tmpGiftFile);
+
+  // 1) Dán nhiều ID mới (xuống dòng, dấu phẩy, khoảng trắng) bằng THÊM VÀO DANH SÁCH vào nhóm 1 X
+  const samplePaste = `
+    75269
+    15232, 5760
+    9097   76093
+    75269
+  `;
+  const appendRes = store.bulkAddToGroup('gift_tier_1', samplePaste);
+  assert.equal(appendRes.ok, true, 'THÊM VÀO DANH SÁCH phải thành công');
+  assert.equal(appendRes.addedCount, 5, 'Phải thêm đúng 5 ID mới và tự lọc 1 ID 75269 trùng trong lần dán');
+  assert.equal(appendRes.check.duplicateInBatchIds.includes('75269'), true);
+
+  // 2) Chặn nếu dán ID đã thuộc nhóm 1 X (75269) sang nhóm 5 X bằng THAY THẾ DANH SÁCH
+  const conflictReplace = store.bulkReplaceGroupIds('gift_tier_5', '75269\n88801\n88802');
+  assert.equal(conflictReplace.ok, false, 'Phải chặn THAY THẾ DANH SÁCH nếu chứa ID đang thuộc nhóm giá trị khác');
+  assert.equal(conflictReplace.check.conflictOtherGroups[0].giftId, '75269');
+
+  // 3) THAY THẾ DANH SÁCH hợp lệ cho nhóm 5 X bằng danh sách ID mới hoàn toàn
+  const validReplace = store.bulkReplaceGroupIds('gift_tier_5', '88801\n88802\n88803\n88801');
+  assert.equal(validReplace.ok, true, 'THAY THẾ DANH SÁCH hợp lệ phải thành công');
+  assert.equal(validReplace.replacedCount, 3, 'Danh sách mới của nhóm 5 X phải có đúng 3 ID duy nhất');
+  assert.deepEqual(validReplace.record?.giftIdStrings, ['88801', '88802', '88803']);
+
+  // 4) Sửa giá trị X của một nhóm (VD: tạo nhóm 30 X rồi chỉnh thành 35 X)
+  const created30 = store.create({
+    giftName: 'Quà Đặc Biệt',
+    groupName: 'NHÓM 30 X',
+    giftIds: ['77701', '77702'],
+    coinValue: 30,
+  });
+  assert.equal(created30.ok, true);
+  if (created30.ok) {
+    const updated35 = store.update(created30.record.id, { coinValue: 35, groupName: 'NHÓM 35 X' });
+    assert.equal(updated35.ok, true);
+    giftRegistry.setMappingsFromServer(store.getAll());
+    assert.equal(giftRegistry.resolveGift({ giftId: '77701' }).matched?.coinValue, 35);
+  }
+
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  store.resetToDefaults();
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  return 'THÊM VÀO DANH SÁCH, THAY THẾ DANH SÁCH, chống trùng liên nhóm và chỉnh giá trị X hoạt động chuẩn xác.';
+});
+
+// ============================================================================
+// 69. CHỈNH SỬA BẢNG PHONG ẤN: SỬA TÊN CẤP BẬC, MỐC X, THỨ TỰ, ẨN/HIỆN & THÊM CẤP MỚI
+// ============================================================================
+runTest(69, 'Chỉnh sửa Bảng PHONG ẤN: đổi "Đệ Tử" -> "Ma Giáo Đệ Tử", "5 X" -> "8 X", ẩn/hiện dòng và thêm cấp mới', () => {
+  const testGm = new SectGameManager();
+  testGm.stopLoop();
+
+  // Kiểm tra mặc định bảng PHONG ẤN có 8 dòng (7 cấp bậc từ 1 X..199 X + 1 dòng 1.000 X DIỆT MÔN)
+  const initialRows = testGm.getPhongAnDisplayRows(false);
+  assert.equal(initialRows.length, 8, 'Mặc định bảng PHONG ẤN phải có 8 dòng hiển thị');
+  assert.equal(initialRows[0].minCoins, 1);
+  assert.equal(initialRows[0].title, 'Đệ Tử');
+  assert.equal(initialRows[1].minCoins, 5);
+  assert.equal(initialRows[1].title, 'Chân Truyền');
+  assert.equal(initialRows[7].minCoins, 1000);
+  assert.equal(initialRows[7].title, 'DIỆT MÔN');
+
+  // 1) Đổi tên cấp bậc "Đệ Tử" thành "Ma Giáo Đệ Tử"
+  const okRename = testGm.updatePhongAnRow('de_tu', { name: 'Ma Giáo Đệ Tử' });
+  assert.equal(okRename, true);
+  assert.equal(testGm.getPhongAnDisplayRows(false)[0].title, 'Ma Giáo Đệ Tử');
+
+  // 2) Đổi mốc "5 X" (Chân Truyền) thành "8 X"
+  const okChangeX = testGm.updatePhongAnRow('chan_truyen', { minCoins: 8 });
+  assert.equal(okChangeX, true);
+  assert.equal(testGm.getPhongAnDisplayRows(false)[1].minCoins, 8);
+
+  // 3) Thêm cấp bậc mới "Thái Thượng" ở mốc 30 X
+  const addedRank = testGm.addPhongAnRankRow({
+    minCoins: 30,
+    name: 'Thái Thượng',
+    enabled: true,
+  });
+  assert.equal(addedRank.minCoins, 30);
+  assert.equal(addedRank.name, 'Thái Thượng');
+  assert.equal(
+    testGm.getPhongAnDisplayRows(false).some(r => r.minCoins === 30 && r.title === 'Thái Thượng'),
+    true
+  );
+
+  // 4) Tắt hiển thị 1 dòng trên bảng PHONG ẤN
+  testGm.updatePhongAnRow(addedRank.id, { enabled: false });
+  assert.equal(
+    testGm.getPhongAnDisplayRows(false).some(r => r.id === addedRank.id),
+    false,
+    'Dòng bị tắt không được hiển thị trên bảng PHONG ẤN ngoài màn hình LIVE'
+  );
+  assert.equal(
+    testGm.getPhongAnDisplayRows(true).some(r => r.id === addedRank.id),
+    true,
+    'Dòng bị tắt vẫn hiển thị trong bảng chỉnh sửa Admin để bật lại'
+  );
+
+  return 'Bảng PHONG ẤN cho phép chỉnh sửa trực tiếp Mốc X, Tên cấp bậc/Sự kiện, Ẩn/Hiện và Thêm cấp bậc mới.';
+});
+
+// ============================================================================
+// 70. LIÊN KẾT LOGIC GIỮA QUẢN LÝ ID QUÀ TIKTOK VÀ BẢNG PHONG ẤN
+// ============================================================================
+runTest(70, 'Liên kết logic: sửa tên quà TikTok không ảnh hưởng tên cấp bậc Phong Ấn; sửa Mốc X Phong Ấn cập nhật ngay logic phong cấp mà không đổi giá trị ID quà', () => {
+  const tmpGiftFile = path.resolve(process.cwd(), 'data', 'test_link_gifts.json');
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  const store = new PersistentGiftStore(tmpGiftFile);
+
+  // 1) Đổi tên quà trong QUẢN LÝ ID QUÀ TIKTOK cho ID 5655 (nhóm 1 X) thành "Hoa Hồng Đỏ Thắm"
+  store.update('gift_tier_1', {
+    giftName: 'Hoa Hồng Đỏ Thắm',
+    giftItems: {
+      '5655': { giftId: '5655', giftName: 'Hoa Hồng Đỏ Thắm', enabled: true },
+    },
+  });
+  giftRegistry.setMappingsFromServer(store.getAll());
+
+  const testGm = new SectGameManager();
+  testGm.stopLoop();
+
+  // Đổi tên cấp bậc 1 X trên BẢNG PHONG ẤN thành "Ma Giáo Đệ Tử"
+  testGm.updatePhongAnRow('de_tu', { name: 'Ma Giáo Đệ Tử' });
+  // Đổi mốc Chân Truyền từ 5 X lên 8 X trên BẢNG PHONG ẤN
+  testGm.updatePhongAnRow('chan_truyen', { minCoins: 8 });
+
+  // Kiểm tra giá trị X của nhóm quà 5 X (ID 5658) vẫn giữ nguyên là 5 X (không bị biến thành 8 X!)
+  const resolved5658 = giftRegistry.resolveGift({ giftId: '5658' });
+  assert.equal(
+    resolved5658.matched?.coinValue,
+    5,
+    'Sửa mốc X trong bảng PHONG ẤN (5 X -> 8 X) tuyệt đối không làm thay đổi giá trị X của ID quà (vẫn là 5 X)'
+  );
+
+  // 2) Khi người chơi tặng ID quà 5655 (1 X, tên quà Admin là "Hoa Hồng Đỏ Thắm"):
+  // Người chơi phải nhận cấp bậc "Ma Giáo Đệ Tử" (theo BẢNG PHONG ẤN), tuyệt đối không lấy tên quà "Hoa Hồng Đỏ Thắm" làm tên cấp bậc!
+  const r1 = testGm.handleGiftEvent({
+    id: 'link_evt_1',
+    type: 'gift',
+    timestamp: Date.now(),
+    userId: 'link_user_01',
+    uniqueId: 'link_user_01',
+    nickname: 'Lâm Bình Chi',
+    giftId: '5655',
+    giftCount: 1,
+  });
+  assert.equal(r1.disciple.totalCoins, 1);
+  assert.equal(r1.disciple.rankName, 'Ma Giáo Đệ Tử');
+  assert.notEqual(r1.disciple.rankName, 'Hoa Hồng Đỏ Thắm');
+
+  // 3) Khi người chơi tặng thêm 1 quà ID 5658 (nhóm 5 X):
+  // Tổng X = 1 + 5 = 6 X. Vì mốc Chân Truyền trên BẢNG PHONG ẤN đã đổi thành 8 X, ở 6 X người chơi vẫn ở cấp "Ma Giáo Đệ Tử"!
+  const r2 = testGm.handleGiftEvent({
+    id: 'link_evt_2',
+    type: 'gift',
+    timestamp: Date.now() + 10,
+    userId: 'link_user_01',
+    uniqueId: 'link_user_01',
+    nickname: 'Lâm Bình Chi',
+    giftId: '5658',
+    giftCount: 1,
+  });
+  assert.equal(r2.disciple.totalCoins, 6);
+  assert.equal(r2.disciple.rankId, 'de_tu', 'Ở 6 X chưa đạt mốc 8 X mới của Chân Truyền');
+
+  // 4) Tặng thêm 2 quà ID 5655 (1 X × 2 = +2 X) -> Tổng X = 6 + 2 = 8 X -> Đạt mốc 8 X -> Thăng lên "Chân Truyền"!
+  const r3 = testGm.handleGiftEvent({
+    id: 'link_evt_3',
+    type: 'gift',
+    timestamp: Date.now() + 20,
+    userId: 'link_user_01',
+    uniqueId: 'link_user_01',
+    nickname: 'Lâm Bình Chi',
+    giftId: '5655',
+    giftCount: 2,
+  });
+  assert.equal(r3.disciple.totalCoins, 8);
+  assert.equal(r3.disciple.rankId, 'chan_truyen');
+  assert.equal(r3.disciple.rankName, 'Chân Truyền');
+  assert.equal(r3.promoted, true);
+
+  if (fs.existsSync(tmpGiftFile)) fs.unlinkSync(tmpGiftFile);
+  store.resetToDefaults();
+  giftRegistry.setMappingsFromServer(store.getAll());
+  return 'Liên kết dữ liệu giữa QUẢN LÝ ID QUÀ TIKTOK và BẢNG PHONG ẤN hoạt động độc lập, chính xác 100%.';
+});
+
 console.log('================================================================================');
 const passedCount = results.filter(r => r.passed).length;
 console.log(`TỔNG KẾT KIỂM THỬ: ${passedCount}/${results.length} HẠNG MỤC PASS (100%)`);
@@ -2067,6 +2262,7 @@ console.log('===================================================================
 if (passedCount !== results.length) {
   process.exit(1);
 }
+
 
 
 

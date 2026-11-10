@@ -209,13 +209,16 @@ export type RankTierId =
   | 'ho_phap_ma_giao'
   | 'dai_truong_lao'
   | 'dong_ton_giao_chu'
-  | 'tan_giao_chu';
+  | 'tan_giao_chu'
+  | (string & {});
 
 export interface RankTierConfig {
   id: RankTierId;
   name: string;
   displayName?: string;
   minCoins: number;
+  enabled?: boolean;
+  displayOrder?: number;
   isCoLeaderRank?: boolean;
   isThroneRank?: boolean;
   supremeGiftIds?: number[];
@@ -396,6 +399,9 @@ export type DietMonCommentMode = 'queue_after' | 'ignore_during' | 'ignore' | 'q
 
 export interface DietMonConfig {
   enabled: boolean;
+  eventName?: string; // default: 'DIỆT MÔN'
+  showInPhongAn?: boolean; // default: true
+  displayOrder?: number; // default: 99
   coinThreshold: number; // default: 1000
   durationSec: number; // default: 15 (15s across 5 phases of 3s)
   shakeIntensity: number; // default: 1.0 (0.2 - 2.0)
@@ -835,7 +841,7 @@ export const ADMIN_CATEGORIES: AdminCategoryDef[] = [
   { id: 'leader_animations', shortLabel: '4. 35 Hoạt ảnh GC', label: '4. Hoạt ảnh Giáo Chủ (35)', icon: '🎬' },
   { id: 'disciples', shortLabel: '5. Đồ Đệ (80)', label: '5. Quản lý Đồ Đệ', icon: '🧘' },
   { id: 'ranks', shortLabel: '6. Cấp bậc & Diệt Môn', label: '6. Hệ thống Cấp bậc & Diệt Môn', icon: '🎖️' },
-  { id: 'tiktok_gifts', shortLabel: '7. Quà TikTok', label: '7. Quản lý Quà TikTok', icon: '🎁' },
+  { id: 'tiktok_gifts', shortLabel: '7. Quà TikTok & Phong Ấn', label: '7. Quà TikTok & Phong Ấn', icon: '🎁' },
   { id: 'comments', shortLabel: '8. 10 Lệnh Chat', label: '8. Quản lý Bình luận', icon: '💬' },
   { id: 'dialogues', shortLabel: '9. 400+ Lời thoại', label: '9. Lời thoại Giáo Chủ', icon: '📜' },
   { id: 'voice_tts', shortLabel: '10. Giọng đọc TTS', label: '10. Giọng đọc & TTS', icon: '🔊' },

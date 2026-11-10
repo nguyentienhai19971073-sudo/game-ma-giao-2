@@ -18,7 +18,7 @@ const CRISP_TEXT_SHADOW: React.CSSProperties = {
 /**
  * Custom Ma Giáo Sacred Seal SVG Emblem (replaces all generic TikTok gift emojis in PHONG CẤP)
  */
-const MaGiaoRankEmblemSVG: React.FC<{
+export const MaGiaoRankEmblemSVG: React.FC<{
   coreColor: string;
   flameColor?: string;
   isApocalypse?: boolean;
@@ -217,11 +217,16 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
     return { moving, kungfu, meditating };
   }, [disciples]);
 
-  // Official rank rows in PHONG CẤP table (dynamically bound to config.ranks + Diệt Môn threshold)
+  // Official rank rows in PHONG ẤN table (dynamically bound to config.ranks + Diệt Môn threshold)
   const phongCapRows = useMemo(() => {
     const sorted = [...config.ranks]
-      .filter(r => r.minCoins > 0)
-      .sort((a, b) => a.minCoins - b.minCoins);
+      .filter(r => r.minCoins > 0 && r.enabled !== false)
+      .sort((a, b) => {
+        const orderA = a.displayOrder ?? a.minCoins;
+        const orderB = b.displayOrder ?? b.minCoins;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.minCoins - b.minCoins;
+      });
     return sorted.map(r => {
       let textColor = 'text-emerald-300';
       let coreColor = '#10B981';
@@ -261,6 +266,9 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
 
   const dietMonThreshold = config.dietMonConfig?.coinThreshold || 1000;
   const formattedDietMonX = `${dietMonThreshold.toLocaleString('vi-VN')} X`;
+  const dietMonLabel = config.dietMonConfig?.eventName || 'DIỆT MÔN';
+  const showDietMonInPhongAn =
+    config.dietMonConfig?.enabled !== false && config.dietMonConfig?.showInPhongAn !== false;
 
   return (
     <div
@@ -434,13 +442,15 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
                 <span className={`truncate ml-1 ${row.textColor}`}>{row.name}</span>
               </div>
             ))}
-            <div className="flex items-center justify-between text-red-200 font-bold pt-0.5 border-t border-amber-400/40">
-              <span className="flex items-center font-mono text-yellow-300 shrink-0">
-                <MaGiaoRankEmblemSVG coreColor="#DC2626" flameColor="#FACC15" isApocalypse />
-                {formattedDietMonX}
-              </span>
-              <span className="text-red-400 tracking-tight truncate ml-1">DIỆT MÔN</span>
-            </div>
+            {showDietMonInPhongAn && (
+              <div className="flex items-center justify-between text-red-200 font-bold pt-0.5 border-t border-amber-400/40">
+                <span className="flex items-center font-mono text-yellow-300 shrink-0">
+                  <MaGiaoRankEmblemSVG coreColor="#DC2626" flameColor="#FACC15" isApocalypse />
+                  {formattedDietMonX}
+                </span>
+                <span className="text-red-400 tracking-tight truncate ml-1">{dietMonLabel}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

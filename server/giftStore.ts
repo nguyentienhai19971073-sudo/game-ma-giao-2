@@ -379,6 +379,101 @@ export class PersistentGiftStore {
   }
 
   /**
+   * Replaces the entire Gift ID list of a value group with the pasted IDs (`THAY THẾ DANH SÁCH`),
+   * while deduplicating within the batch and rejecting IDs that belong to other value groups.
+   */
+  public bulkReplaceGroupIds(
+    targetGroupId: string,
+    rawInput: string | (string | number)[],
+    defaultItemName?: string
+  ): {
+    ok: boolean;
+    replacedCount: number;
+    check: BulkGiftIdCheckResult;
+    record?: GiftMappingConfig;
+    error?: string;
+  } {
+    const idx = this.mappings.findIndex(m => m.id === targetGroupId);
+    if (idx === -1) {
+      return {
+        ok: false,
+        replacedCount: 0,
+        check: this.inspectBulkGiftIds(rawInput),
+        error: `Không tìm thấy nhóm quà có ID "${targetGroupId}".`,
+      };
+    }
+
+    const check = this.inspectBulkGiftIds(rawInput, targetGroupId);
+    if (check.conflictOtherGroups.length > 0) {
+      const c = check.conflictOtherGroups[0];
+      return {
+        ok: false,
+        replacedCount: 0,
+        check,
+        error: `Phát hiện ${check.conflictOtherGroups.length} ID đã thuộc nhóm giá trị khác (VD: ID ${c.giftId} thuộc ${c.groupName} - ${c.coinValue} X). Không cho phép một ID hoạt động ở nhiều nhóm giá trị khác nhau.`,
+      };
+    }
+
+    const tokens = Array.isArray(rawInput)
+      ? rawInput.map(x => String(x).trim()).filter(Boolean)
+      : tokenizeBulkGiftIdString(rawInput);
+    const orderedValidIds: string[] = [];
+    const seen = new Set<string>();
+    for (const token of tokens) {
+      if (/^\d+$/.test(token) && !/^0+$/.test(token)) {
+        const cleanId = token.replace(/^0+/, '');
+        if (!seen.has(cleanId)) {
+          seen.add(cleanId);
+          orderedValidIds.push(cleanId);
+        }
+      }
+    }
+
+    if (orderedValidIds.length === 0) {
+      return {
+        ok: false,
+        replacedCount: 0,
+        check,
+        error: 'Không có Gift ID hợp lệ nào để thay thế danh sách.',
+      };
+    }
+
+    const group = this.mappings[idx];
+    const prevItems = group.giftItems || {};
+    const nextItems: Record<string, GiftItemMetadata> = {};
+    for (const idStr of orderedValidIds) {
+      if (prevItems[idStr]) {
+        nextItems[idStr] = { ...prevItems[idStr], giftId: idStr };
+      } else {
+        nextItems[idStr] = {
+          giftId: idStr,
+          giftName: (defaultItemName && defaultItemName.trim()) || group.giftName,
+          enabled: true,
+        };
+      }
+    }
+
+    const updated = this.sanitizeMapping({
+      ...group,
+      giftIdStrings: orderedValidIds,
+      giftIds: orderedValidIds,
+      giftId: Number(orderedValidIds[0]) || undefined,
+      giftItems: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+
+    this.mappings[idx] = updated;
+    this.saveToDisk(this.mappings);
+
+    return {
+      ok: true,
+      replacedCount: orderedValidIds.length,
+      check,
+      record: structuredClone(updated),
+    };
+  }
+
+  /**
    * Moves a single Gift ID from its current group to another target group.
    */
   public moveGiftId(

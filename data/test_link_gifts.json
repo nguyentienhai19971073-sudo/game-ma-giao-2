@@ -1,0 +1,313 @@
+[
+  {
+    "id": "gift_tier_1",
+    "groupName": "NHÓM 1 X",
+    "giftIds": [
+      5655,
+      5656
+    ],
+    "giftIdStrings": [
+      "5655",
+      "5656"
+    ],
+    "giftItems": {
+      "5655": {
+        "giftId": "5655",
+        "giftName": "Ma Ấn Nhập Môn",
+        "enabled": true
+      },
+      "5656": {
+        "giftId": "5656",
+        "giftName": "Hương Trầm Nhập Môn",
+        "enabled": true
+      }
+    },
+    "giftId": 5655,
+    "giftName": "Ma Ấn Nhập Môn",
+    "coinValue": 1,
+    "rankGranted": "de_tu",
+    "inGameEffect": "GIA NHẬP MA GIÁO – ĐỆ TỬ + Khói tím dưới chân",
+    "visualAura": "#A855F7",
+    "soundEffect": "bell",
+    "priorityLevel": 2,
+    "grantsThrone": false,
+    "grantsCoLeader": false,
+    "icon": "🜂",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_5",
+    "groupName": "NHÓM 5 X",
+    "giftIds": [
+      5658,
+      5269
+    ],
+    "giftIdStrings": [
+      "5658",
+      "5269"
+    ],
+    "giftItems": {
+      "5269": {
+        "giftId": "5269",
+        "giftName": "Chén Trà Chân Truyền",
+        "enabled": true
+      },
+      "5658": {
+        "giftId": "5658",
+        "giftName": "Lệnh Bài Chân Truyền",
+        "enabled": true
+      }
+    },
+    "giftId": 5658,
+    "giftName": "Lệnh Bài Chân Truyền",
+    "coinValue": 5,
+    "rankGranted": "chan_truyen",
+    "inGameEffect": "Thăng cấp Chân Truyền + Vòng Ma Ấn phát sáng dưới chân",
+    "visualAura": "#C084FC",
+    "soundEffect": "bell",
+    "priorityLevel": 3,
+    "grantsThrone": false,
+    "grantsCoLeader": false,
+    "icon": "🜁",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_10",
+    "groupName": "NHÓM 10 X",
+    "giftIds": [
+      8910,
+      6064
+    ],
+    "giftIdStrings": [
+      "8910",
+      "6064"
+    ],
+    "giftItems": {
+      "6064": {
+        "giftId": "6064",
+        "giftName": "Bội Kiếm Tinh Anh",
+        "enabled": true
+      },
+      "8910": {
+        "giftId": "8910",
+        "giftName": "Huyết Ngọc Tinh Anh",
+        "enabled": true
+      }
+    },
+    "giftId": 8910,
+    "giftName": "Huyết Ngọc Tinh Anh",
+    "coinValue": 10,
+    "rankGranted": "tinh_anh",
+    "inGameEffect": "Thăng cấp Tinh Anh + Vận nội công & tia năng lượng tím đỏ",
+    "visualAura": "#F43F5E",
+    "soundEffect": "gong",
+    "priorityLevel": 4,
+    "grantsThrone": false,
+    "grantsCoLeader": false,
+    "icon": "🜂",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_20",
+    "groupName": "NHÓM 20 X",
+    "giftIds": [
+      5999,
+      5487
+    ],
+    "giftIdStrings": [
+      "5999",
+      "5487"
+    ],
+    "giftItems": {
+      "5487": {
+        "giftId": "5487",
+        "giftName": "Lệnh Kỳ Hộ Pháp",
+        "enabled": true
+      },
+      "5999": {
+        "giftId": "5999",
+        "giftName": "Chiến Giáp Hộ Pháp",
+        "enabled": true
+      }
+    },
+    "giftId": 5999,
+    "giftName": "Chiến Giáp Hộ Pháp",
+    "coinValue": 20,
+    "rankGranted": "ho_phap",
+    "inGameEffect": "Thăng cấp Hộ Pháp + Khí ma đỏ sẫm & trống trận vang rền",
+    "visualAura": "#E11D48",
+    "soundEffect": "drum",
+    "priorityLevel": 5,
+    "grantsThrone": false,
+    "grantsCoLeader": false,
+    "icon": "🜃",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_50",
+    "groupName": "NHÓM 50 X",
+    "giftIds": [
+      6093,
+      6104
+    ],
+    "giftIdStrings": [
+      "6093",
+      "6104"
+    ],
+    "giftItems": {
+      "6093": {
+        "giftId": "6093",
+        "giftName": "Kim Ấn Trưởng Lão",
+        "enabled": true
+      },
+      "6104": {
+        "giftId": "6104",
+        "giftName": "Long Trượng Trưởng Lão",
+        "enabled": true
+      }
+    },
+    "giftId": 6093,
+    "giftName": "Kim Ấn Trưởng Lão",
+    "coinValue": 50,
+    "rankGranted": "truong_lao",
+    "inGameEffect": "Thăng cấp Trưởng Lão + Cột sáng vàng tím trước ngai Giáo Chủ",
+    "visualAura": "#FBBF24",
+    "soundEffect": "thunder",
+    "priorityLevel": 7,
+    "grantsThrone": false,
+    "grantsCoLeader": false,
+    "icon": "🜄",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_99",
+    "groupName": "NHÓM 99 X",
+    "giftIds": [
+      5827,
+      5659
+    ],
+    "giftIdStrings": [
+      "5827",
+      "5659"
+    ],
+    "giftItems": {
+      "5659": {
+        "giftId": "5659",
+        "giftName": "Tử Kim Ấn Đồng Tôn",
+        "enabled": true
+      },
+      "5827": {
+        "giftId": "5827",
+        "giftName": "Bí Kíp Thiên Ma Đồng Tôn",
+        "enabled": true
+      }
+    },
+    "giftId": 5827,
+    "giftName": "Bí Kíp Thiên Ma Đồng Tôn",
+    "coinValue": 99,
+    "rankGranted": "dong_ton",
+    "inGameEffect": "Phong chức Đồng Tôn + An tọa Đài Danh Dự cạnh Ngai Giáo Chủ",
+    "visualAura": "#FDE047",
+    "soundEffect": "fanfare",
+    "priorityLevel": 8,
+    "grantsThrone": false,
+    "grantsCoLeader": true,
+    "icon": "⚜️",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_199",
+    "groupName": "NHÓM 199 X",
+    "giftIds": [
+      29201,
+      8913
+    ],
+    "giftIdStrings": [
+      "29201",
+      "8913"
+    ],
+    "giftItems": {
+      "8913": {
+        "giftId": "8913",
+        "giftName": "Cửu Long Ngọc Tỷ Giáo Chủ",
+        "enabled": true
+      },
+      "29201": {
+        "giftId": "29201",
+        "giftName": "Thánh Hỏa Lệnh Giáo Chủ",
+        "enabled": true
+      }
+    },
+    "giftId": 29201,
+    "giftName": "Thánh Hỏa Lệnh Giáo Chủ",
+    "coinValue": 199,
+    "rankGranted": "giao_chu",
+    "inGameEffect": "Đăng Cơ Giáo Chủ! Giáo Chủ hiện tại nhường ngai chính & làm Thái Thượng Giáo Chủ!",
+    "visualAura": "#F59E0B",
+    "soundEffect": "fanfare",
+    "priorityLevel": 9,
+    "grantsThrone": true,
+    "grantsCoLeader": false,
+    "icon": "👑",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  },
+  {
+    "id": "gift_tier_supreme",
+    "groupName": "NHÓM 1.000 X",
+    "giftIds": [
+      9999,
+      29900,
+      30001
+    ],
+    "giftIdStrings": [
+      "9999",
+      "29900",
+      "30001"
+    ],
+    "giftItems": {
+      "9999": {
+        "giftId": "9999",
+        "giftName": "Ma Giáo Đại Kiếp – Diệt Môn Lệnh",
+        "enabled": true
+      },
+      "29900": {
+        "giftId": "29900",
+        "giftName": "Hắc Long Diệt Thế Ấn",
+        "enabled": true
+      },
+      "30001": {
+        "giftId": "30001",
+        "giftName": "Thiên Ma Vô Thượng Lệnh",
+        "enabled": true
+      }
+    },
+    "giftId": 9999,
+    "giftName": "Ma Giáo Đại Kiếp – Diệt Môn Lệnh",
+    "coinValue": 1000,
+    "rankGranted": "giao_chu",
+    "inGameEffect": "ĐẠI SỰ KIỆN DIỆT MÔN 1.000 X! Sập đại điện, vòng xoáy hút toàn bộ người chơi & tái thiết sảnh!",
+    "visualAura": "#EF4444",
+    "soundEffect": "fanfare",
+    "priorityLevel": 10,
+    "grantsThrone": true,
+    "grantsCoLeader": false,
+    "icon": "🌀",
+    "enabled": true,
+    "createdAt": "2026-11-10T14:13:16.697Z",
+    "updatedAt": "2026-11-10T14:13:16.697Z"
+  }
+]

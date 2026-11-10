@@ -391,6 +391,15 @@ export class SectGameManager {
       this.computeDiscipleStayMetrics(w, now);
     }
 
+    // Also re-evaluate stored playerLedger records against updated rank milestones/names
+    for (const [uid, rec] of this.playerLedger.entries()) {
+      if (!this.disciples.has(uid)) {
+        const expected = this.computeRankForCoins(rec.totalCoins);
+        rec.rankId = expected.id;
+        rec.rankName = expected.name;
+      }
+    }
+
     if (this.config.rankAccumulation.mode === 'persistent') {
       if (prevMode !== 'persistent' && this.playerLedger.size === 0) {
         this.loadPersistentLedgerIfAvailable();
@@ -1970,6 +1979,9 @@ export class SectGameManager {
 
   private getRankOrder(rankId: RankTierId): number {
     const normalized = this.normalizeRankTierId(rankId);
+    const sortedAsc = [...this.config.ranks].sort((a, b) => a.minCoins - b.minCoins);
+    const cfgIdx = sortedAsc.findIndex(r => r.id === rankId || r.id === normalized);
+    if (cfgIdx !== -1) return cfgIdx;
     const order: RankTierId[] = [
       'dan_den',
       'de_tu',
@@ -1981,25 +1993,166 @@ export class SectGameManager {
       'giao_chu',
     ];
     const idx = order.indexOf(normalized);
-    if (idx !== -1) return idx;
-    const cfgIdx = this.config.ranks.findIndex(r => r.id === rankId);
-    return cfgIdx !== -1 ? cfgIdx : 0;
+    return idx !== -1 ? idx : 0;
   }
 
   public computeRankForCoins(totalCoins: number, explicitRank?: RankTierId): RankTierConfig {
-    const sortedDesc = [...this.config.ranks].sort((a, b) => b.minCoins - a.minCoins);
+    const activeRanks = this.config.ranks.filter(r => r.enabled !== false || r.minCoins === 0);
+    const sortedDesc = [...(activeRanks.length > 0 ? activeRanks : this.config.ranks)].sort(
+      (a, b) => b.minCoins - a.minCoins
+    );
     const byCoins = sortedDesc.find(r => totalCoins >= r.minCoins) || this.config.ranks[0];
 
     if (explicitRank) {
       const normalizedExplicit = this.normalizeRankTierId(explicitRank);
       if (this.getRankOrder(normalizedExplicit) > this.getRankOrder(byCoins.id)) {
-        return (
-          this.config.ranks.find(r => r.id === normalizedExplicit || r.id === explicitRank) ||
-          byCoins
+        const foundExplicit = this.config.ranks.find(
+          r => (r.id === normalizedExplicit || r.id === explicitRank) && r.enabled !== false
         );
+        if (foundExplicit) return foundExplicit;
       }
     }
     return byCoins;
+  }
+
+  /**
+   * Returns the ordered rows displayed on the LIVE `PHONG ẤN` table (and Admin Preview).
+   * Strictly includes ONLY: Ma Giáo SVG Emblem (`rankId`), `minCoins` (`Số X`), and `title` (`Tên cấp bậc / Sự kiện`).
+   * Never includes Gift IDs or TikTok Gift Names.
+   */
+  public getPhongAnDisplayRows(includeDisabled = false): {
+    id: string;
+    rankId: RankTierId;
+    minCoins: number;
+    title: string;
+    isDietMon: boolean;
+    enabled: boolean;
+    displayOrder: number;
+  }[] {
+    const rankRows = this.config.ranks
+      .filter(r => r.minCoins > 0 && (includeDisabled || r.enabled !== false))
+      .map((r, idx) => ({
+        id: r.id,
+        rankId: r.id,
+        minCoins: r.minCoins,
+        title: r.displayName || r.name,
+        isDietMon: false,
+        enabled: r.enabled !== false,
+        displayOrder: r.displayOrder ?? (idx + 1) * 10,
+      }));
+
+    const dmCfg = this.config.dietMonConfig || DEFAULT_DIET_MON_CONFIG;
+    const dmEnabled = dmCfg.enabled !== false && dmCfg.showInPhongAn !== false;
+    const allRows = [...rankRows];
+    if (includeDisabled || dmEnabled) {
+      allRows.push({
+        id: 'diet_mon',
+        rankId: 'giao_chu',
+        minCoins: dmCfg.coinThreshold || 1000,
+        title: dmCfg.eventName || 'DIỆT MÔN',
+        isDietMon: true,
+        enabled: dmEnabled,
+        displayOrder: dmCfg.displayOrder ?? 990,
+      });
+    }
+
+    return allRows.sort((a, b) => {
+      if (a.displayOrder !== b.displayOrder) return a.displayOrder - b.displayOrder;
+      return a.minCoins - b.minCoins;
+    });
+  }
+
+  /**
+   * Updates a row in the `PHONG ẤN` table (either a rank tier or the `diet_mon` event row)
+   * and immediately synchronizes rank promotion logic & LIVE state without altering Gift ID values.
+   */
+  public updatePhongAnRow(
+    rowId: string,
+    patch: {
+      minCoins?: number;
+      name?: string;
+      displayOrder?: number;
+      enabled?: boolean;
+    }
+  ): boolean {
+    if (rowId === 'diet_mon') {
+      const dm = this.config.dietMonConfig || structuredClone(DEFAULT_DIET_MON_CONFIG);
+      if (patch.minCoins !== undefined) {
+        dm.coinThreshold = Math.max(1, Math.round(Number(patch.minCoins)));
+      }
+      if (patch.name !== undefined && patch.name.trim()) {
+        dm.eventName = patch.name.trim();
+      }
+      if (patch.displayOrder !== undefined) {
+        dm.displayOrder = Number(patch.displayOrder);
+      }
+      if (patch.enabled !== undefined) {
+        dm.showInPhongAn = Boolean(patch.enabled);
+        dm.enabled = Boolean(patch.enabled);
+      }
+      this.config.dietMonConfig = dm;
+      this.updateMasterConfig(this.config);
+      return true;
+    }
+
+    const idx = this.config.ranks.findIndex(r => r.id === rowId);
+    if (idx === -1) return false;
+    const target = this.config.ranks[idx];
+    if (patch.minCoins !== undefined && target.id !== 'dan_den') {
+      target.minCoins = Math.max(1, Math.round(Number(patch.minCoins)));
+    }
+    if (patch.name !== undefined && patch.name.trim()) {
+      target.name = patch.name.trim();
+      target.displayName = patch.name.trim();
+    }
+    if (patch.displayOrder !== undefined) {
+      target.displayOrder = Number(patch.displayOrder);
+    }
+    if (patch.enabled !== undefined && target.id !== 'dan_den') {
+      target.enabled = Boolean(patch.enabled);
+    }
+    this.config.ranks.sort((a, b) => a.minCoins - b.minCoins);
+    this.updateMasterConfig(this.config);
+    return true;
+  }
+
+  /**
+   * Adds a new custom rank tier to the `PHONG ẤN` table & rank promotion system.
+   */
+  public addPhongAnRankRow(input: {
+    id?: string;
+    minCoins: number;
+    name: string;
+    displayOrder?: number;
+    enabled?: boolean;
+  }): RankTierConfig {
+    const cleanName = input.name.trim() || `Cấp Bậc ${input.minCoins} X`;
+    const minCoins = Math.max(1, Math.round(Number(input.minCoins || 1)));
+    const newId: RankTierId =
+      input.id?.trim() ||
+      `rank_${minCoins}_${Date.now().toString(36).slice(-4)}`;
+
+    const newRank: RankTierConfig = {
+      id: newId,
+      name: cleanName,
+      displayName: cleanName,
+      minCoins,
+      enabled: input.enabled !== false,
+      displayOrder: input.displayOrder ?? minCoins,
+      isCoLeaderRank: false,
+      isThroneRank: false,
+      primaryColor: '#A855F7',
+      secondaryColor: '#F59E0B',
+      auraColor: 'rgba(168, 85, 247, 0.55)',
+      scaleMultiplier: 1.08,
+      costumeDescription: `Võ phục ${cleanName} Ma Giáo`,
+      hallPrivilege: `Đạt mốc ${minCoins} X trên bảng Phong Ấn`,
+    };
+
+    this.config.ranks.push(newRank);
+    this.config.ranks.sort((a, b) => a.minCoins - b.minCoins);
+    this.updateMasterConfig(this.config);
+    return newRank;
   }
 
   public applyRankToDisciple(disciple: SectDisciple, rankId: RankTierId) {
