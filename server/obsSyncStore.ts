@@ -12,7 +12,10 @@ import {
 } from '../src/types/magiao';
 import {
   createDefaultMasterConfig,
+  DEFAULT_DIET_MON_CONFIG,
+  DEFAULT_MAGIAO_GIFT_MAPPINGS,
   DEFAULT_OVERLAY_CONFIG,
+  DEFAULT_RANKS,
   DEFAULT_RANK_ACCUMULATION_CONFIG,
   DEFAULT_SCENE_CONFIG,
   DEFAULT_STAY_DURATION_CONFIG,
@@ -21,6 +24,17 @@ import {
   sanitizeStayDurationConfig,
 } from '../src/data/sectDefaults';
 import { DEFAULT_SECT_DIALOGUE_BANK } from '../src/data/sectDialogueBank';
+
+const LEGACY_RANK_IDS = new Set([
+  'ngoai_mon_do_de',
+  'noi_mon_de_tu',
+  'su_huynh_su_ty',
+  'tinh_anh_de_tu',
+  'ho_phap_ma_giao',
+  'dai_truong_lao',
+  'dong_ton_giao_chu',
+  'tan_giao_chu',
+]);
 
 export function buildDefaultMasterConfig(): MaGiaoMasterConfig {
   return createDefaultMasterConfig(DEFAULT_SECT_DIALOGUE_BANK);
@@ -48,6 +62,9 @@ export function normalizeIncomingMasterConfig(
   if (!base.rankAccumulation) {
     base.rankAccumulation = structuredClone(DEFAULT_RANK_ACCUMULATION_CONFIG);
   }
+  if (!base.dietMonConfig) {
+    base.dietMonConfig = structuredClone(DEFAULT_DIET_MON_CONFIG);
+  }
   if (!raw || typeof raw !== 'object') {
     return base;
   }
@@ -60,7 +77,8 @@ export function normalizeIncomingMasterConfig(
     base.sectLeaderAnimations = obj.sectLeaderAnimations;
   }
   if (Array.isArray(obj.ranks) && obj.ranks.length > 0) {
-    base.ranks = obj.ranks;
+    const hasLegacyRank = obj.ranks.some(r => LEGACY_RANK_IDS.has(r.id));
+    base.ranks = hasLegacyRank ? structuredClone(DEFAULT_RANKS) : obj.ranks;
   }
   if (obj.rankAccumulation && typeof obj.rankAccumulation === 'object') {
     base.rankAccumulation = {
@@ -68,8 +86,22 @@ export function normalizeIncomingMasterConfig(
       ...obj.rankAccumulation,
     };
   }
+  if (obj.dietMonConfig && typeof obj.dietMonConfig === 'object') {
+    base.dietMonConfig = {
+      ...DEFAULT_DIET_MON_CONFIG,
+      ...base.dietMonConfig,
+      ...obj.dietMonConfig,
+      coinThreshold: Math.max(10, Number(obj.dietMonConfig.coinThreshold ?? base.dietMonConfig.coinThreshold ?? 1000)),
+      durationSec: Math.max(5, Math.min(30, Number(obj.dietMonConfig.durationSec ?? base.dietMonConfig.durationSec ?? 15))),
+    };
+  }
   if (Array.isArray(obj.giftMappings) && obj.giftMappings.length > 0) {
-    base.giftMappings = obj.giftMappings;
+    const hasLegacyGiftRank = obj.giftMappings.some(
+      g => g.rankGranted && LEGACY_RANK_IDS.has(g.rankGranted)
+    );
+    base.giftMappings = hasLegacyGiftRank
+      ? structuredClone(DEFAULT_MAGIAO_GIFT_MAPPINGS)
+      : obj.giftMappings;
   }
   if (Array.isArray(obj.commentCommands) && obj.commentCommands.length > 0) {
     base.commentCommands = obj.commentCommands;
@@ -78,7 +110,13 @@ export function normalizeIncomingMasterConfig(
     base.commentSettings = { ...base.commentSettings, ...obj.commentSettings };
   }
   if (Array.isArray(obj.dialogues) && obj.dialogues.length > 0) {
-    base.dialogues = obj.dialogues;
+    const hasDietMonLines = obj.dialogues.some(d => d.category === 'diet_mon');
+    base.dialogues = hasDietMonLines
+      ? obj.dialogues
+      : [
+          ...obj.dialogues,
+          ...DEFAULT_SECT_DIALOGUE_BANK.filter(d => d.category === 'diet_mon'),
+        ];
   }
   if (obj.voiceConfig && typeof obj.voiceConfig === 'object') {
     base.voiceConfig = { ...base.voiceConfig, ...obj.voiceConfig };

@@ -27,6 +27,17 @@ export function normalizeGiftIds(giftIds?: number[], legacyGiftId?: number): num
   return Array.from(new Set(rawList));
 }
 
+const LEGACY_GIFT_RANKS = new Set([
+  'ngoai_mon_do_de',
+  'noi_mon_de_tu',
+  'su_huynh_su_ty',
+  'tinh_anh_de_tu',
+  'ho_phap_ma_giao',
+  'dai_truong_lao',
+  'dong_ton_giao_chu',
+  'tan_giao_chu',
+]);
+
 export class PersistentGiftStore {
   private readonly filePath: string;
   private mappings: GiftMappingConfig[] = [];
@@ -43,7 +54,13 @@ export class PersistentGiftStore {
         const raw = fs.readFileSync(this.filePath, 'utf8');
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map(item => this.sanitizeMapping(item));
+          const hasLegacy = parsed.some(
+            (item: Partial<GiftMappingConfig>) =>
+              item.rankGranted && LEGACY_GIFT_RANKS.has(item.rankGranted)
+          );
+          if (!hasLegacy) {
+            return parsed.map(item => this.sanitizeMapping(item));
+          }
         }
       }
     } catch (err) {

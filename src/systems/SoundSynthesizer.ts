@@ -192,6 +192,11 @@ export class SoundSynthesizer {
     }
   }
 
+  public playThunder() {
+    this.playGong(1.3);
+    this.playWarDrum(3);
+  }
+
   public playBySoundType(type: 'gong' | 'drum' | 'sword' | 'bell' | 'thunder' | 'fanfare') {
     switch (type) {
       case 'gong':
@@ -207,8 +212,7 @@ export class SoundSynthesizer {
         this.playChime();
         break;
       case 'thunder':
-        this.playGong(1.3);
-        this.playWarDrum(3);
+        this.playThunder();
         break;
       case 'fanfare':
         this.playThroneFanfare();

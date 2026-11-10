@@ -8,6 +8,7 @@ import { DEFAULT_VOICE_CONFIG } from '../data/sectDefaults';
 import { ttsProviderManager } from './TTSProviderManager';
 
 const PRIORITY_WEIGHTS: Record<VoicePriorityTier, number> = {
+  diet_mon: 120,
   throne_transfer: 100,
   high_gift: 85,
   minigame: 70,

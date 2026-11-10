@@ -189,11 +189,19 @@ export interface ZoneRect {
 }
 
 // ============================================================================
-// 9 SECT RANKS & TIKTOK GIFT REGISTRY
+// 8 OFFICIAL SECT RANKS + 1000 XU DIỆT MÔN EVENT & TIKTOK GIFT REGISTRY
 // ============================================================================
 
 export type RankTierId =
   | 'dan_den'
+  | 'de_tu'
+  | 'chan_truyen'
+  | 'tinh_anh'
+  | 'ho_phap'
+  | 'truong_lao'
+  | 'dong_ton'
+  | 'giao_chu'
+  // Legacy aliases retained for seamless migration of persisted JSON files
   | 'ngoai_mon_do_de'
   | 'noi_mon_de_tu'
   | 'su_huynh_su_ty'
@@ -206,7 +214,9 @@ export type RankTierId =
 export interface RankTierConfig {
   id: RankTierId;
   name: string;
+  displayName?: string;
   minCoins: number;
+  isCoLeaderRank?: boolean;
   isThroneRank?: boolean;
   supremeGiftIds?: number[];
   primaryColor: string;
@@ -265,6 +275,17 @@ export interface SectDisciple {
   stepPhase?: number;
   meditationPhase?: 'none' | 'sitting_down' | 'seated' | 'standing_up';
   spectateTargetId?: string;
+  // Promotion visual effect fields
+  promotionEffectTier?: RankTierId;
+  promotionEffectStartedAt?: number;
+  promotionEffectUntil?: number;
+  promotionCeremonyUntil?: number;
+  // Diệt Môn spiral suction fields
+  suctionOrder?: number;
+  suctionStartX?: number;
+  suctionStartY?: number;
+  vortexProgress?: number;
+  vortexAngle?: number;
 }
 
 export interface GiftMappingConfig {
@@ -335,6 +356,71 @@ export interface RankAccumulationConfig {
   singlePromotionPerEvent: boolean;
 }
 
+export type DietMonPhase =
+  | 'inactive'
+  | 'tremor'
+  | 'collapse'
+  | 'avatar_descend'
+  | 'vortex_suck'
+  | 'rebuild';
+
+export type DietMonCommentMode = 'queue_after' | 'ignore_during' | 'ignore' | 'queue' | 'spawn_after';
+
+export interface DietMonConfig {
+  enabled: boolean;
+  coinThreshold: number; // default: 1000
+  durationSec: number; // default: 15 (15s across 5 phases of 3s)
+  shakeIntensity: number; // default: 1.0 (0.2 - 2.0)
+  enableCollapseEffect: boolean; // default: true
+  enableHallCollapse?: boolean;
+  showCenterAvatar: boolean; // default: true
+  showBigAvatar?: boolean;
+  avatarScale: number; // default: 1.0 (0.6 - 1.6)
+  enableVortexEffect: boolean; // default: true
+  enableVortexSuck?: boolean;
+  suctionSpeed: number; // default: 1.0 (0.5 - 2.0)
+  enableSoundAndTts: boolean; // default: true
+  enableRebuildEffect: boolean; // default: true
+  enableAutoRebuild?: boolean;
+  commentHandlingDuringEvent: DietMonCommentMode; // default: 'queue_after'
+  commentHandlingMode?: DietMonCommentMode;
+  maxQueueSize: number; // default: 3
+}
+
+export interface DietMonLogEntry {
+  id: string;
+  timestamp: number;
+  userId: string;
+  uniqueId: string;
+  displayName: string;
+  avatarUrl?: string;
+  totalCoins: number;
+  suckedCount: number;
+  suckedDisciplesCount?: number;
+  isDemo: boolean;
+  isTest?: boolean;
+}
+
+export interface DietMonRuntimeState {
+  isActive: boolean;
+  phase: DietMonPhase;
+  startedAt: number;
+  durationMs: number;
+  elapsedMs: number;
+  progress: number; // 0.0 -> 1.0
+  phaseProgress: number; // 0.0 -> 1.0 within current 3s phase
+  triggerUserId: string;
+  triggerUniqueId: string;
+  triggerDisplayName: string;
+  triggerAvatarUrl?: string;
+  triggerCoins: number;
+  suckedDisciplesCount: number;
+  hallCleared: boolean;
+  isTestMode: boolean;
+  queuedCount: number;
+  history: DietMonLogEntry[];
+}
+
 export interface GiftHistoryEntry {
   id: string;
   eventId: string;
@@ -354,6 +440,7 @@ export interface GiftHistoryEntry {
   newRankName: string;
   promoted: boolean;
   isThroneTakeover: boolean;
+  triggeredDietMon?: boolean;
   isDemo?: boolean;
 }
 
@@ -361,12 +448,14 @@ export interface PlayerLedgerRecord {
   userId: string;
   uniqueId: string;
   displayName: string;
+  avatarUrl?: string;
   totalCoins: number;
   giftCount: number;
   rankId: RankTierId;
   rankName: string;
   isCoLeader: boolean;
   isSectLeader: boolean;
+  triggeredDietMon?: boolean;
   isDemo: boolean;
   updatedAt: number;
 }
@@ -410,7 +499,8 @@ export type DialogueCategory =
   | 'minigame_lose'
   | 'elder_coleader'
   | 'quiet_hall'
-  | 'throne_transfer';
+  | 'throne_transfer'
+  | 'diet_mon';
 
 export interface DialogueLineConfig {
   id: string;
@@ -435,6 +525,7 @@ export type VoiceProviderType =
   | 'web_speech';
 
 export type VoicePriorityTier =
+  | 'diet_mon'
   | 'throne_transfer'
   | 'high_gift'
   | 'minigame'
@@ -605,6 +696,7 @@ export interface MaGiaoMasterConfig {
   sectLeaderAnimations: SectLeaderAnimationDef[];
   ranks: RankTierConfig[];
   rankAccumulation: RankAccumulationConfig;
+  dietMonConfig: DietMonConfig;
   giftMappings: GiftMappingConfig[];
   commentCommands: CommentCommandConfig[];
   commentSettings: CommentSystemSettings;
@@ -714,7 +806,7 @@ export const ADMIN_CATEGORIES: AdminCategoryDef[] = [
   { id: 'sect_leader', shortLabel: '3. Giáo Chủ', label: '3. Quản lý Giáo Chủ', icon: '👑' },
   { id: 'leader_animations', shortLabel: '4. 35 Hoạt ảnh GC', label: '4. Hoạt ảnh Giáo Chủ (35)', icon: '🎬' },
   { id: 'disciples', shortLabel: '5. Đồ Đệ (80)', label: '5. Quản lý Đồ Đệ', icon: '🧘' },
-  { id: 'ranks', shortLabel: '6. 9 Cấp bậc', label: '6. Hệ thống Cấp bậc', icon: '🎖️' },
+  { id: 'ranks', shortLabel: '6. Cấp bậc & Diệt Môn', label: '6. Hệ thống Cấp bậc & Diệt Môn', icon: '🎖️' },
   { id: 'tiktok_gifts', shortLabel: '7. Quà TikTok', label: '7. Quản lý Quà TikTok', icon: '🎁' },
   { id: 'comments', shortLabel: '8. 10 Lệnh Chat', label: '8. Quản lý Bình luận', icon: '💬' },
   { id: 'dialogues', shortLabel: '9. 400+ Lời thoại', label: '9. Lời thoại Giáo Chủ', icon: '📜' },

@@ -460,6 +460,19 @@ const THRONE_TRANSFER_TEXTS: string[] = [
   'Thiên mệnh đã định! Với lễ vật tối thượng {giftName}, {leaderName} chính thức trở thành Giáo Chủ đời tiếp theo của Ma Giáo Online!'
 ];
 
+const DIET_MON_TEXTS: string[] = [
+  'Không ổn rồi! Đại điện Ma Giáo đang rung chuyển! Là ai đã kích hoạt đại kiếp một nghìn xu?!',
+  'Trời đất ơi, cả đại điện sập thật rồi! Đồ đệ chạy đâu hết rồi?!',
+  'Là {playerName}! Chính người này đã mở vòng xoáy Diệt Môn cuốn bay toàn bộ môn đồ!',
+  'Tất cả môn đồ đều bị hút vào hư không! Ai còn sống mau bình luận một câu để quay lại đại điện!',
+  'Đại điện đã khôi phục! Môn đồ đâu, mau xuất hiện lại cho bổn tọa điểm danh!',
+  'Một nghìn xu giáng thế! {playerName} vừa thi triển Thiên Ma Diệt Môn Đại Pháp làm sập cả trụ rồng!',
+  'Giáo Chủ ta còn suýt bị hút bay mất dép! {playerName} ra tay thật là kinh thiên động địa!',
+  'Vòng xoáy Ma Ấn của {playerName} đã quét sạch đại điện trong chớp mắt! Mau bình luận để tái nhập sơn môn!',
+  'Tái thiết đại điện hoàn tất! Cấp bậc và tổng xu của chư vị vẫn còn nguyên, mau gõ chat bước vào cổng lớn!',
+  'Lịch sử Ma Giáo ghi nhận đại kiếp Diệt Môn do {playerName} khởi phát! Sảnh đường đã sẵn sàng đón anh hùng trở lại!'
+];
+
 const PERSONALITY_ROTATION: SectLeaderPersonality[] = ['ba_chu', 'hai_huoc', 'cuong_vo'];
 
 function buildCategoryLines(
@@ -487,6 +500,7 @@ export const DEFAULT_SECT_DIALOGUE_BANK: DialogueLineConfig[] = [
   ...buildCategoryLines('elder_coleader', ELDER_COLEADER_TEXTS, 'elder'),
   ...buildCategoryLines('quiet_hall', QUIET_HALL_TEXTS, 'quiet'),
   ...buildCategoryLines('throne_transfer', THRONE_TRANSFER_TEXTS, 'throne'),
+  ...buildCategoryLines('diet_mon', DIET_MON_TEXTS, 'dietmon'),
 ];
 
 export interface DialogueInterpolationContext {
@@ -566,4 +580,5 @@ export const DIALOGUE_CATEGORY_LABELS: Record<DialogueCategory, string> = {
   elder_coleader: '8. Tương tác Trưởng Lão & Đồng Tôn (20 câu)',
   quiet_hall: '9. Khi đại điện vắng (20 câu)',
   throne_transfer: '10. Chuyển giao Ngai Vàng (20 câu)',
+  diet_mon: '11. Đại Sự Kiện DIỆT MÔN 1.000 Xu (10 câu)',
 };

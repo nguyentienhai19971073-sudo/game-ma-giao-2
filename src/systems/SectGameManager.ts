@@ -4,6 +4,11 @@ import {
   CommentCommandConfig,
   DiagnosticLogEntry,
   DialogueCategory,
+  DietMonCommentMode,
+  DietMonConfig,
+  DietMonLogEntry,
+  DietMonPhase,
+  DietMonRuntimeState,
   DiscipleFSMState,
   DiscipleStayDurationConfig,
   DiscipleStayStatus,
@@ -23,9 +28,11 @@ import {
   SectLeaderAnimationId,
   SectLeaderRuntimeState,
   TikTokLiveEvent,
+  VoicePriorityTier,
 } from '../types/magiao';
 import {
   createDefaultMasterConfig,
+  DEFAULT_DIET_MON_CONFIG,
   DEFAULT_RANK_ACCUMULATION_CONFIG,
   DEFAULT_RANKS,
   DEFAULT_STAY_DURATION_CONFIG,
@@ -55,6 +62,7 @@ export interface GameStateSnapshot {
   giftHistory: GiftHistoryEntry[];
   playerLedger: PlayerLedgerRecord[];
   miniGame: MiniGameActiveState;
+  dietMon: DietMonRuntimeState;
   logs: DiagnosticLogEntry[];
   fps: number;
 }
@@ -116,6 +124,38 @@ export class SectGameManager {
     sweepingPenaltyNames: [],
   };
 
+  private dietMon: DietMonRuntimeState = {
+    isActive: false,
+    phase: 'inactive',
+    startedAt: 0,
+    durationMs: 15000,
+    elapsedMs: 0,
+    progress: 0,
+    phaseProgress: 0,
+    triggerUserId: '',
+    triggerUniqueId: '',
+    triggerDisplayName: '',
+    triggerAvatarUrl: undefined,
+    triggerCoins: 0,
+    suckedDisciplesCount: 0,
+    hallCleared: false,
+    isTestMode: false,
+    queuedCount: 0,
+    history: [],
+  };
+  private triggeredDietMonUserIds = new Set<string>();
+  private dietMonQueue: Array<{
+    userId: string;
+    uniqueId: string;
+    displayName: string;
+    avatarUrl?: string;
+    totalCoins: number;
+    isDemo: boolean;
+    isTestMode?: boolean;
+  }> = [];
+  private pendingDietMonComments = new Map<string, TikTokLiveEvent>();
+  private lastDietMonCompletedAt = 0;
+
   private listeners = new Set<GameStateListener>();
   private tickInterval: number | null = null;
   private lastTickAt = Date.now();
@@ -130,6 +170,9 @@ export class SectGameManager {
       : createDefaultMasterConfig(DEFAULT_SECT_DIALOGUE_BANK);
     if (!this.config.rankAccumulation) {
       this.config.rankAccumulation = structuredClone(DEFAULT_RANK_ACCUMULATION_CONFIG);
+    }
+    if (!this.config.dietMonConfig) {
+      this.config.dietMonConfig = structuredClone(DEFAULT_DIET_MON_CONFIG);
     }
     this.config.stayDurationConfig = sanitizeStayDurationConfig(this.config.stayDurationConfig);
     this.config.playerAnimationConfig.idleTimeoutSec =
@@ -230,6 +273,9 @@ export class SectGameManager {
     this.config = structuredClone(next);
     if (!this.config.rankAccumulation) {
       this.config.rankAccumulation = structuredClone(DEFAULT_RANK_ACCUMULATION_CONFIG);
+    }
+    if (!this.config.dietMonConfig) {
+      this.config.dietMonConfig = structuredClone(DEFAULT_DIET_MON_CONFIG);
     }
     this.config.stayDurationConfig = sanitizeStayDurationConfig(this.config.stayDurationConfig);
     this.config.playerAnimationConfig.idleTimeoutSec =
@@ -401,7 +447,7 @@ export class SectGameManager {
       leaderName?: string;
       gameName?: string;
     } = {},
-    priority: 'throne_transfer' | 'high_gift' | 'minigame' | 'promotion' | 'welcome' | 'boast_idle' = 'boast_idle',
+    priority: VoicePriorityTier = 'boast_idle',
     preferredAnimation?: SectLeaderAnimationId
   ): string {
     const bank =
@@ -439,7 +485,7 @@ export class SectGameManager {
       priority,
       category,
       animationId: animToPlay,
-      interruptIfHigher: priority === 'throne_transfer',
+      interruptIfHigher: priority === 'diet_mon' || priority === 'throne_transfer',
     });
 
     this.addLog('tts', `Giáo Chủ phát ngôn [${category}]`, spokenText);
@@ -478,6 +524,8 @@ export class SectGameManager {
         return 'sleepy_yawn';
       case 'throne_transfer':
         return 'throne_handover';
+      case 'diet_mon':
+        return 'shocked_jump';
     }
   }
 
@@ -931,6 +979,21 @@ export class SectGameManager {
       return { disciple: null, isNewSpawn: false, matchedCommand: null, releasedFromSweep: false };
     }
 
+    // Conflict prevention during 15-second DIỆT MÔN event:
+    // Do NOT spawn new characters while the hall is collapsing or sucking players into the vortex!
+    if (this.dietMon.isActive) {
+      const mode = this.config.dietMonConfig?.commentHandlingDuringEvent || 'queue_after';
+      if (mode === 'queue_after') {
+        this.pendingDietMonComments.set(userId, { ...event, timestamp: Date.now() });
+        this.addLog(
+          'comment',
+          `[Diệt Môn] Đã lưu bình luận chờ tái xuất: ${event.nickname || userId}`,
+          `Sẽ xuất hiện tại cổng ngay sau khi kết thúc 15 giây Diệt Môn.`
+        );
+      }
+      return { disciple: null, isNewSpawn: false, matchedCommand: null, releasedFromSweep: false };
+    }
+
     const rawComment = String(event.comment || '').trim();
     const bubbleText = sanitizeCommentForBubble(
       rawComment,
@@ -1049,8 +1112,9 @@ export class SectGameManager {
 
     const initialCoins = savedLedger ? savedLedger.totalCoins : 0;
     const initialGiftCount = savedLedger ? savedLedger.giftCount : 0;
+    const normalizedSavedRankId = savedLedger ? this.normalizeRankTierId(savedLedger.rankId) : undefined;
     const resolvedRank = savedLedger
-      ? this.config.ranks.find(r => r.id === savedLedger.rankId) ||
+      ? this.config.ranks.find(r => r.id === normalizedSavedRankId) ||
         this.computeRankForCoins(initialCoins)
       : this.config.ranks[0];
 
@@ -1065,12 +1129,15 @@ export class SectGameManager {
       this.config.stayDurationConfig?.inactivityTimeoutSec ||
       DEFAULT_STAY_DURATION_CONFIG.inactivityTimeoutSec;
 
+    const isDongTon = resolvedRank.id === 'dong_ton' || resolvedRank.id === 'dong_ton_giao_chu' || Boolean(resolvedRank.isCoLeaderRank);
+    const isGiaoChu = resolvedRank.id === 'giao_chu' || resolvedRank.id === 'tan_giao_chu' || Boolean(resolvedRank.isThroneRank);
+
     return {
       userId,
       uniqueId: event.uniqueId || userId,
       displayName,
       compactName: formatCompactPlayerName(displayName, 5),
-      avatarUrl: event.avatarUrl,
+      avatarUrl: event.avatarUrl || savedLedger?.avatarUrl,
       gender,
       rankId: resolvedRank.id,
       rankName: resolvedRank.name,
@@ -1093,10 +1160,10 @@ export class SectGameManager {
       direction: 'rear',
       fsmState: 'gate_entry',
       animation: 'walk',
-      zone: resolvedRank.id === 'dong_ton_giao_chu' ? 'co_leader_dais' : 'entry_gate',
+      zone: isDongTon ? 'co_leader_dais' : isGiaoChu ? 'throne_zone' : 'entry_gate',
       isSweepingPenalty: false,
-      isCoLeader: resolvedRank.id === 'dong_ton_giao_chu',
-      isSectLeader: resolvedRank.id === 'tan_giao_chu',
+      isCoLeader: isDongTon,
+      isSectLeader: isGiaoChu && !this.sectLeader.hasCustomPlayerLeader,
       isDemo: Boolean(event.isDemo),
       scale: resolvedRank.scaleMultiplier || 1.0,
       auraColor: resolvedRank.auraColor,
@@ -1111,8 +1178,52 @@ export class SectGameManager {
   }
 
   private assignHallSlotAndWalkIn(disciple: SectDisciple) {
-    const coords = this.sampleFreeRoamPosition({ excludeUserId: disciple.userId });
     const now = Date.now();
+    // If returning player holds Giáo Chủ rank and main throne is vacant, restore them onto the main throne!
+    if (
+      (disciple.rankId === 'giao_chu' || disciple.rankId === 'tan_giao_chu') &&
+      !this.sectLeader.hasCustomPlayerLeader
+    ) {
+      disciple.isSectLeader = true;
+      disciple.isCoLeader = false;
+      disciple.zone = 'throne_zone';
+      disciple.fsmState = 'walk_in_hall';
+      disciple.animation = 'walk';
+      disciple.direction = 'front';
+      disciple.targetX = this.config.sectLeader.thronePosition.x;
+      disciple.targetY = this.config.sectLeader.thronePosition.y + 2;
+      disciple.actionStartedAt = now;
+      disciple.actionDurationMs = 4500;
+      disciple.nextDecisionAt = now + 4500;
+      this.sectLeader.hasCustomPlayerLeader = true;
+      this.sectLeader.currentLeaderUserId = disciple.userId;
+      this.sectLeader.currentLeaderName = `Giáo Chủ ${disciple.displayName}`;
+      return;
+    }
+
+    // If returning player holds Đồng Tôn (or is a secondary Giáo Chủ when main throne is occupied), send to Co-Leader Dais
+    if (
+      disciple.isCoLeader ||
+      disciple.rankId === 'dong_ton' ||
+      disciple.rankId === 'dong_ton_giao_chu' ||
+      disciple.rankId === 'giao_chu'
+    ) {
+      const dais = this.computeZoneCoordinates('co_leader_dais');
+      disciple.isSectLeader = false;
+      disciple.isCoLeader = true;
+      disciple.zone = 'co_leader_dais';
+      disciple.fsmState = 'walk_in_hall';
+      disciple.animation = 'walk';
+      disciple.direction = 'front';
+      disciple.targetX = dais.x;
+      disciple.targetY = dais.y;
+      disciple.actionStartedAt = now;
+      disciple.actionDurationMs = 4500;
+      disciple.nextDecisionAt = now + 4500;
+      return;
+    }
+
+    const coords = this.sampleFreeRoamPosition({ excludeUserId: disciple.userId });
     disciple.zone = coords.zone;
     disciple.fsmState = 'walk_in_hall';
     disciple.animation = 'walk';
@@ -1285,12 +1396,14 @@ export class SectGameManager {
       userId: disciple.userId,
       uniqueId: disciple.uniqueId,
       displayName: disciple.displayName,
+      avatarUrl: disciple.avatarUrl,
       totalCoins: disciple.totalCoins,
       giftCount: disciple.giftCount,
       rankId: disciple.rankId,
       rankName: disciple.rankName,
       isCoLeader: disciple.isCoLeader,
-      isSectLeader: disciple.isSectLeader,
+      isSectLeader: disciple.isSectLeader || disciple.rankId === 'giao_chu' || disciple.rankId === 'tan_giao_chu',
+      triggeredDietMon: this.triggeredDietMonUserIds.has(disciple.userId),
       isDemo: disciple.isDemo,
       updatedAt: Date.now(),
     };
@@ -1349,7 +1462,16 @@ export class SectGameManager {
 
     this.playerLedger.clear();
     for (const [uid, rec] of Object.entries(payload.records || {})) {
-      this.playerLedger.set(uid, { ...rec });
+      const normalizedId = this.normalizeRankTierId(rec.rankId);
+      const rankDef = this.config.ranks.find(r => r.id === normalizedId) || this.computeRankForCoins(rec.totalCoins);
+      this.playerLedger.set(uid, {
+        ...rec,
+        rankId: rankDef.id,
+        rankName: rankDef.name,
+      });
+      if (rec.triggeredDietMon) {
+        this.triggeredDietMonUserIds.add(uid);
+      }
     }
     this.giftHistory = Array.isArray(payload.giftHistory) ? [...payload.giftHistory] : [];
     this.promotions = Array.isArray(payload.promotions) ? [...payload.promotions] : [];
@@ -1374,6 +1496,8 @@ export class SectGameManager {
     disciple: SectDisciple;
     promoted: boolean;
     throneTransferred: boolean;
+    triggeredDietMon: boolean;
+    dietMonTriggered: boolean;
     newRankName: string;
     duplicateIgnored?: boolean;
     addedCoins?: number;
@@ -1397,6 +1521,8 @@ export class SectGameManager {
         disciple: existing,
         promoted: false,
         throneTransferred: false,
+        triggeredDietMon: false,
+        dietMonTriggered: false,
         newRankName: existing.rankName,
         duplicateIgnored: true,
         addedCoins: 0,
@@ -1418,6 +1544,8 @@ export class SectGameManager {
           disciple: existing,
           promoted: false,
           throneTransferred: false,
+          triggeredDietMon: false,
+          dietMonTriggered: false,
           newRankName: existing.rankName,
           duplicateIgnored: true,
           addedCoins: 0,
@@ -1439,14 +1567,19 @@ export class SectGameManager {
 
     if (!disciple) {
       disciple = this.createNewDisciple(event);
-      this.disciples.set(userId, disciple);
-      this.assignHallSlotAndWalkIn(disciple);
+      if (!this.dietMon.isActive) {
+        this.disciples.set(userId, disciple);
+        this.assignHallSlotAndWalkIn(disciple);
+      }
     } else {
       if (event.nickname && event.nickname.trim()) {
         disciple.displayName = event.nickname.trim();
         disciple.compactName = formatCompactPlayerName(disciple.displayName, 5);
       }
-      if (!this.disciples.has(userId)) {
+      if (event.avatarUrl) {
+        disciple.avatarUrl = event.avatarUrl;
+      }
+      if (!this.disciples.has(userId) && !this.dietMon.isActive) {
         // Promote from waiting queue immediately on gift!
         this.waitingQueue = this.waitingQueue.filter(d => d.userId !== userId);
         this.disciples.set(userId, disciple);
@@ -1518,38 +1651,47 @@ export class SectGameManager {
     disciple.giftCount += deltaRepeatCount;
     this.refreshDiscipleInteraction(disciple, Date.now());
 
-    const throneRankConfig = this.config.ranks.find(r => r.id === 'tan_giao_chu');
-    const supremeMinCoins = throneRankConfig?.minCoins || 1000;
+    const throneRankConfig =
+      this.config.ranks.find(r => r.isThroneRank || r.id === 'giao_chu' || r.id === 'tan_giao_chu') ||
+      this.config.ranks[this.config.ranks.length - 1];
+    const throneMinCoins = throneRankConfig?.minCoins || 199;
+    const dietMonThreshold = Math.max(200, this.config.dietMonConfig?.coinThreshold || 1000);
 
-    // Supreme Throne Gift is handled separately from normal cumulative ranks (0 -> 199 xu)
-    const isSupremeGift =
-      Boolean(matchedById && matched?.grantsThrone) ||
-      (hasExplicitGiftId &&
-        Boolean(throneRankConfig?.supremeGiftIds?.includes(Number(event.giftId)))) ||
-      (!hasExplicitGiftId && Boolean(matched?.grantsThrone) && addedCoins >= supremeMinCoins) ||
-      addedCoins >= supremeMinCoins;
+    const coinsToEvaluate = accumulationEnabled ? disciple.totalCoins : addedCoins;
+    const explicitRankFromGift = !accumulationEnabled ? matched?.rankGranted : undefined;
+    const nextRank = this.computeRankForCoins(coinsToEvaluate, explicitRankFromGift);
+    const currentRankOrder = this.getRankOrder(disciple.rankId);
+    const nextRankOrder = this.getRankOrder(nextRank.id);
+
+    const reachesThrone =
+      nextRank.id === 'giao_chu' ||
+      nextRank.id === 'tan_giao_chu' ||
+      Boolean(nextRank.isThroneRank) ||
+      coinsToEvaluate >= throneMinCoins ||
+      Boolean(matchedById && matched?.grantsThrone);
 
     let throneTransferred = false;
 
-    if (isSupremeGift) {
+    if (reachesThrone && currentRankOrder < this.getRankOrder(throneRankConfig.id)) {
       throneTransferred = true;
       this.executeThroneTransfer(disciple, giftDisplayName);
-    } else {
-      // Evaluate cumulative rank progression (0 -> 1 -> 5 -> 10 -> 20 -> 50 -> 99 -> 199 xu Đồng Tôn Giáo Chủ)
-      // When crossing multiple thresholds in a single event, only apply the highest newly reached rank once!
-      const coinsToEvaluate = accumulationEnabled ? disciple.totalCoins : addedCoins;
-      const explicitRankFromGift = !accumulationEnabled ? matched?.rankGranted : undefined;
-      const nextRank = this.computeRankForCoins(coinsToEvaluate, explicitRankFromGift);
-      const currentRankOrder = this.getRankOrder(disciple.rankId);
-      const nextRankOrder = this.getRankOrder(nextRank.id);
-
-      if (nextRankOrder > currentRankOrder) {
-        this.applyRankToDisciple(disciple, nextRank.id);
-      }
+    } else if (nextRankOrder > currentRankOrder) {
+      this.applyRankToDisciple(disciple, nextRank.id);
     }
 
     // Do not repeat promotion ceremony if player remains at the exact same rank
     const promoted = disciple.rankId !== prevRankId;
+
+    // Check if player reached or exceeded 1,000 coins for the DIỆT MÔN apocalyptic event!
+    let triggeredDietMon = false;
+    if (
+      this.config.dietMonConfig?.enabled !== false &&
+      disciple.totalCoins >= dietMonThreshold &&
+      !this.triggeredDietMonUserIds.has(disciple.userId)
+    ) {
+      triggeredDietMon = true;
+      this.triggeredDietMonUserIds.add(disciple.userId);
+    }
 
     // Record into Gift History & Player Ledger
     const historyEntry: GiftHistoryEntry = {
@@ -1571,53 +1713,33 @@ export class SectGameManager {
       newRankName: disciple.rankName,
       promoted,
       isThroneTakeover: throneTransferred,
+      triggeredDietMon,
       isDemo: Boolean(event.isDemo || disciple.isDemo),
     };
     this.giftHistory = [historyEntry, ...this.giftHistory].slice(0, 200);
     this.syncDiscipleToLedger(disciple);
 
-    if (matched?.soundEffect) {
-      soundSynthesizer.playBySoundType(matched.soundEffect);
-    } else if (promoted) {
-      soundSynthesizer.playGong(1.0);
-    }
-
-    if (promoted && !throneTransferred) {
-      const promo: PromotionAnnouncement = {
-        id: `promo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: Date.now(),
+    if (triggeredDietMon) {
+      this.triggerDietMonEvent({
         userId: disciple.userId,
+        uniqueId: disciple.uniqueId,
         displayName: disciple.displayName,
-        oldRankName: prevRankName,
-        newRankId: disciple.rankId,
-        newRankName: disciple.rankName,
-        giftName: giftDisplayName,
-        coinValue: disciple.totalCoins,
-        isThroneTakeover: false,
-        isCoLeader: disciple.rankId === 'dong_ton_giao_chu',
-      };
-      this.promotions = [promo, ...this.promotions].slice(0, 50);
-      if (this.config.rankAccumulation?.mode === 'persistent') {
-        this.savePersistentLedger();
+        avatarUrl: disciple.avatarUrl,
+        totalCoins: disciple.totalCoins,
+        isDemo: Boolean(event.isDemo || disciple.isDemo),
+      });
+    } else {
+      if (matched?.soundEffect) {
+        soundSynthesizer.playBySoundType(matched.soundEffect);
+      } else if (promoted) {
+        soundSynthesizer.playGong(1.0);
       }
 
-      const category: DialogueCategory =
-        disciple.rankId === 'dong_ton_giao_chu' || disciple.rankId === 'dai_truong_lao'
-          ? 'elder_coleader'
-          : 'promotion';
-
-      this.triggerSectLeaderSpeech(
-        category,
-        {
-          playerName: disciple.displayName,
-          rankName: disciple.rankName,
-          giftName: giftDisplayName,
-        },
-        disciple.totalCoins >= 50 ? 'high_gift' : 'promotion',
-        disciple.rankId === 'dong_ton_giao_chu' ? 'salute_coleader' : 'promote_disciple'
-      );
-    } else if (!promoted) {
-      this.triggerSectLeaderAnimation('gift_small_react');
+      if (promoted && !throneTransferred) {
+        this.triggerRankSpecificPromotionCeremony(disciple, prevRankName, giftDisplayName);
+      } else if (!promoted) {
+        this.triggerSectLeaderAnimation('gift_small_react');
+      }
     }
 
     this.addLog(
@@ -1625,7 +1747,7 @@ export class SectGameManager {
       `${disciple.displayName} tặng ${giftDisplayName} (+${addedCoins} xu)`,
       `Cộng dồn: ${totalCoinsBefore} + ${addedCoins} = ${disciple.totalCoins} xu | Cấp bậc: ${disciple.rankName}${
         promoted ? ` (Thăng cấp từ ${prevRankName})` : ''
-      }`
+      }${triggeredDietMon ? ' • KÍCH HOẠT ĐẠI SỰ KIỆN DIỆT MÔN!' : ''}`
     );
 
     this.notify();
@@ -1633,31 +1755,120 @@ export class SectGameManager {
       disciple,
       promoted,
       throneTransferred,
+      triggeredDietMon,
+      dietMonTriggered: triggeredDietMon,
       newRankName: disciple.rankName,
       duplicateIgnored: false,
       addedCoins,
     };
   }
 
+  /**
+   * Executes rank-specific visual, sound, movement, and Sect Leader TTS effects for ranks 1..99 xu.
+   */
+  private triggerRankSpecificPromotionCeremony(
+    disciple: SectDisciple,
+    prevRankName: string,
+    giftDisplayName: string
+  ) {
+    const normalizedId = this.normalizeRankTierId(disciple.rankId);
+    const isCoLeader = normalizedId === 'dong_ton' || Boolean(disciple.isCoLeader);
+
+    const promoTitle =
+      normalizedId === 'de_tu'
+        ? `GIA NHẬP MA GIÁO – ${disciple.rankName}`
+        : disciple.rankName;
+
+    const promo: PromotionAnnouncement = {
+      id: `promo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      userId: disciple.userId,
+      displayName: disciple.displayName,
+      oldRankName: prevRankName,
+      newRankId: disciple.rankId,
+      newRankName: promoTitle,
+      giftName: giftDisplayName,
+      coinValue: disciple.totalCoins,
+      isThroneTakeover: false,
+      isCoLeader,
+    };
+    this.promotions = [promo, ...this.promotions].slice(0, 50);
+    if (this.config.rankAccumulation?.mode === 'persistent') {
+      this.savePersistentLedger();
+    }
+
+    let leaderAnim: SectLeaderAnimationId = 'promote_disciple';
+    let category: DialogueCategory = 'promotion';
+
+    if (normalizedId === 'de_tu') {
+      // 1 Xu – Đệ Tử: Sect Leader raises hand to accept ceremony
+      leaderAnim = 'point_at_player';
+      soundSynthesizer.playChime();
+    } else if (normalizedId === 'chan_truyen') {
+      // 5 Xu – Chân Truyền: Ma Ấn seal under feet + promote_disciple
+      leaderAnim = 'promote_disciple';
+      soundSynthesizer.playChime();
+    } else if (normalizedId === 'tinh_anh') {
+      // 10 Xu – Tinh Anh: Disciple channels internal qi (`cast_seal`) + crimson-purple rays
+      leaderAnim = 'praise_disciple';
+      soundSynthesizer.playGong(0.95);
+    } else if (normalizedId === 'ho_phap') {
+      // 20 Xu – Hộ Pháp: Martial armor + dark crimson qi + war drum + Sect Leader stands up
+      leaderAnim = 'stand_up_throne';
+      soundSynthesizer.playWarDrum(2);
+    } else if (normalizedId === 'truong_lao') {
+      // 50 Xu – Trưởng Lão: Sect Leader stands up, light pillar in front of throne, TTS reads name & title
+      leaderAnim = 'stand_up_throne';
+      category = 'elder_coleader';
+      soundSynthesizer.playThunder();
+    } else if (normalizedId === 'dong_ton') {
+      // 99 Xu – Đồng Tôn: Purple-gold sweep, auxiliary throne, Sect Leader salutes Co-Leader
+      leaderAnim = 'salute_coleader';
+      category = 'elder_coleader';
+      soundSynthesizer.playThroneFanfare();
+    }
+
+    this.triggerSectLeaderSpeech(
+      category,
+      {
+        playerName: disciple.displayName,
+        rankName: disciple.rankName,
+        giftName: giftDisplayName,
+      },
+      disciple.totalCoins >= 50 ? 'high_gift' : 'promotion',
+      leaderAnim
+    );
+  }
+
   private executeThroneTransfer(newLeader: SectDisciple, giftDisplayName: string) {
     const now = Date.now();
-    // Demote any previous player who held tan_giao_chu down to dong_ton_giao_chu
+    const throneRank =
+      this.config.ranks.find(r => r.isThroneRank || r.id === 'giao_chu' || r.id === 'tan_giao_chu') ||
+      this.config.ranks[this.config.ranks.length - 1];
+
+    // Move any previous player who occupied the physical main throne over to the Co-Leader honor dais
+    // while keeping their earned Giáo Chủ rank in the ledger!
     for (const d of this.disciples.values()) {
       if (d.isSectLeader && d.userId !== newLeader.userId) {
         d.isSectLeader = false;
-        this.applyRankToDisciple(d, 'dong_ton_giao_chu');
+        d.isCoLeader = true;
+        const dais = this.computeZoneCoordinates('co_leader_dais');
+        d.zone = 'co_leader_dais';
+        d.targetX = dais.x;
+        d.targetY = dais.y;
+        d.direction = 'front';
         this.syncDiscipleToLedger(d);
       }
     }
 
     const prevLeaderTitle = this.sectLeader.currentLeaderName;
-    const prevPlayerRankName = newLeader.rankName || 'Hào Kiệt';
+    const prevPlayerRankName = newLeader.rankName || 'Đồng Tôn';
     this.sectLeader.formerLeaderName = `${this.config.sectLeader.formerLeaderTitle} (${prevLeaderTitle})`;
-    this.sectLeader.currentLeaderName = `Tân Giáo Chủ ${newLeader.displayName}`;
+    this.sectLeader.currentLeaderName = `Giáo Chủ ${newLeader.displayName}`;
     this.sectLeader.currentLeaderUserId = newLeader.userId;
     this.sectLeader.hasCustomPlayerLeader = true;
 
-    this.applyRankToDisciple(newLeader, 'tan_giao_chu');
+    this.applyRankToDisciple(newLeader, throneRank.id);
     newLeader.isSectLeader = true;
     newLeader.isCoLeader = false;
     newLeader.zone = 'throne_zone';
@@ -1665,13 +1876,17 @@ export class SectGameManager {
     newLeader.targetY = this.config.sectLeader.thronePosition.y + 2;
     newLeader.direction = 'front';
     newLeader.animation = 'celebrate';
+    newLeader.promotionEffectTier = 'giao_chu';
+    newLeader.promotionEffectStartedAt = now;
+    newLeader.promotionEffectUntil = now + 6500;
+    newLeader.promotionCeremonyUntil = now + 6500;
     newLeader.actionStartedAt = now;
     newLeader.actionDurationMs = 6000;
     newLeader.nextDecisionAt = now + 6000;
 
-    // All other disciples bow to the new Sect Leader!
+    // All other disciples (including Hộ Pháp & Trưởng Lão) bow to the new Sect Leader!
     for (const d of this.disciples.values()) {
-      if (d.userId !== newLeader.userId && !d.isSweepingPenalty) {
+      if (d.userId !== newLeader.userId && !d.isSweepingPenalty && d.fsmState !== 'departing_gate') {
         d.animation = 'bow';
         d.direction = 'rear';
         d.actionStartedAt = now;
@@ -1688,8 +1903,8 @@ export class SectGameManager {
       userId: newLeader.userId,
       displayName: newLeader.displayName,
       oldRankName: prevPlayerRankName,
-      newRankId: 'tan_giao_chu',
-      newRankName: 'Tân Giáo Chủ',
+      newRankId: throneRank.id,
+      newRankName: throneRank.name,
       giftName: giftDisplayName,
       coinValue: newLeader.totalCoins,
       isThroneTakeover: true,
@@ -1703,7 +1918,7 @@ export class SectGameManager {
         playerName: newLeader.displayName,
         leaderName: newLeader.displayName,
         giftName: giftDisplayName,
-        rankName: 'Tân Giáo Chủ',
+        rankName: throneRank.name,
       },
       'throne_transfer',
       'throne_handover'
@@ -1711,43 +1926,71 @@ export class SectGameManager {
 
     this.addLog(
       'promotion',
-      `SOÁN NGÔI GIÁO CHỦ: ${newLeader.displayName}`,
-      `Dâng ${giftDisplayName} đăng cơ Tân Giáo Chủ! Cựu Giáo Chủ lui về làm Thái Thượng Giáo Chủ.`
+      `ĐĂNG CƠ GIÁO CHỦ (199 XU): ${newLeader.displayName}`,
+      `Dâng ${giftDisplayName} đăng cơ ${throneRank.name}! Giáo Chủ cũ lui về làm Thái Thượng Giáo Chủ.`
     );
   }
 
+  public normalizeRankTierId(rankId?: RankTierId): RankTierId {
+    switch (rankId) {
+      case 'ngoai_mon_do_de':
+        return 'de_tu';
+      case 'noi_mon_de_tu':
+        return 'chan_truyen';
+      case 'su_huynh_su_ty':
+        return 'tinh_anh';
+      case 'tinh_anh_de_tu':
+        return 'ho_phap';
+      case 'ho_phap_ma_giao':
+        return 'truong_lao';
+      case 'dai_truong_lao':
+      case 'dong_ton_giao_chu':
+        return 'dong_ton';
+      case 'tan_giao_chu':
+        return 'giao_chu';
+      default:
+        return rankId || 'dan_den';
+    }
+  }
+
   private getRankOrder(rankId: RankTierId): number {
+    const normalized = this.normalizeRankTierId(rankId);
     const order: RankTierId[] = [
       'dan_den',
-      'ngoai_mon_do_de',
-      'noi_mon_de_tu',
-      'su_huynh_su_ty',
-      'tinh_anh_de_tu',
-      'ho_phap_ma_giao',
-      'dai_truong_lao',
-      'dong_ton_giao_chu',
-      'tan_giao_chu',
+      'de_tu',
+      'chan_truyen',
+      'tinh_anh',
+      'ho_phap',
+      'truong_lao',
+      'dong_ton',
+      'giao_chu',
     ];
-    return order.indexOf(rankId);
+    const idx = order.indexOf(normalized);
+    if (idx !== -1) return idx;
+    const cfgIdx = this.config.ranks.findIndex(r => r.id === rankId);
+    return cfgIdx !== -1 ? cfgIdx : 0;
   }
 
   public computeRankForCoins(totalCoins: number, explicitRank?: RankTierId): RankTierConfig {
-    const standardRanks = this.config.ranks.filter(r => !r.isThroneRank);
-    const sortedDesc = [...standardRanks].sort((a, b) => b.minCoins - a.minCoins);
-    const byCoins = sortedDesc.find(r => totalCoins >= r.minCoins) || standardRanks[0];
+    const sortedDesc = [...this.config.ranks].sort((a, b) => b.minCoins - a.minCoins);
+    const byCoins = sortedDesc.find(r => totalCoins >= r.minCoins) || this.config.ranks[0];
 
-    if (
-      explicitRank &&
-      explicitRank !== 'tan_giao_chu' &&
-      this.getRankOrder(explicitRank) > this.getRankOrder(byCoins.id)
-    ) {
-      return this.config.ranks.find(r => r.id === explicitRank) || byCoins;
+    if (explicitRank) {
+      const normalizedExplicit = this.normalizeRankTierId(explicitRank);
+      if (this.getRankOrder(normalizedExplicit) > this.getRankOrder(byCoins.id)) {
+        return (
+          this.config.ranks.find(r => r.id === normalizedExplicit || r.id === explicitRank) ||
+          byCoins
+        );
+      }
     }
     return byCoins;
   }
 
   public applyRankToDisciple(disciple: SectDisciple, rankId: RankTierId) {
-    const rankDef = this.config.ranks.find(r => r.id === rankId) || this.config.ranks[0];
+    const normalizedId = this.normalizeRankTierId(rankId);
+    const rankDef =
+      this.config.ranks.find(r => r.id === rankId || r.id === normalizedId) || this.config.ranks[0];
     const now = Date.now();
     disciple.rankId = rankDef.id;
     disciple.rankName = rankDef.name;
@@ -1755,28 +1998,54 @@ export class SectGameManager {
     disciple.auraColor = rankDef.auraColor;
     disciple.primaryColor = rankDef.primaryColor;
     disciple.secondaryColor = rankDef.secondaryColor;
-    disciple.isCoLeader = rankDef.id === 'dong_ton_giao_chu';
-    disciple.isSectLeader = rankDef.id === 'tan_giao_chu';
-    disciple.animation = 'celebrate';
-    disciple.actionStartedAt = now;
-    disciple.actionDurationMs = 3500;
-    disciple.nextDecisionAt = now + 3500;
+    disciple.isCoLeader =
+      normalizedId === 'dong_ton' || Boolean(rankDef.isCoLeaderRank);
+    disciple.isSectLeader =
+      normalizedId === 'giao_chu' || Boolean(rankDef.isThroneRank);
+    disciple.promotionEffectTier = normalizedId;
+    disciple.promotionEffectStartedAt = now;
+    disciple.promotionEffectUntil = now + 5200;
+    disciple.promotionCeremonyUntil = now + 5200;
 
-    if (rankDef.id === 'dong_ton_giao_chu') {
+    if (normalizedId === 'tinh_anh') {
+      // 10 Xu – Tinh Anh: channels internal qi (`cast_seal`) with rotating crimson-purple energy rays
+      disciple.animation = 'cast_seal';
+      disciple.actionStartedAt = now;
+      disciple.actionDurationMs = 3800;
+      disciple.nextDecisionAt = now + 3800;
+    } else if (normalizedId === 'ho_phap') {
+      // 20 Xu – Hộ Pháp: martial stance (`combo_kungfu`) with dark crimson qi burst
+      disciple.animation = 'combo_kungfu';
+      disciple.actionStartedAt = now;
+      disciple.actionDurationMs = 4000;
+      disciple.nextDecisionAt = now + 4000;
+    } else {
+      disciple.animation = 'celebrate';
+      disciple.actionStartedAt = now;
+      disciple.actionDurationMs = 3500;
+      disciple.nextDecisionAt = now + 3500;
+    }
+
+    if (normalizedId === 'dong_ton') {
       const dais = this.computeZoneCoordinates('co_leader_dais');
       disciple.zone = 'co_leader_dais';
       disciple.targetX = dais.x;
       disciple.targetY = dais.y;
       disciple.direction = 'front';
-    } else if (rankDef.id === 'dai_truong_lao' || rankDef.id === 'ho_phap_ma_giao') {
-      // Elders & Guardians can roam prominently in the upper-middle hall and central aisle
+    } else if (normalizedId === 'truong_lao') {
+      // 50 Xu – Trưởng Lão: advances to promotion ceremony spot right in front of the Throne!
+      disciple.zone = 'central_aisle';
+      disciple.targetX = 50 + (Math.random() * 10 - 5);
+      disciple.targetY = Math.max(33, (this.config.sectLeader.thronePosition?.y || 22.13) + 12.5);
+      disciple.direction = 'rear';
+    } else if (normalizedId === 'ho_phap') {
       const spot = this.sampleFreeRoamPosition({
         excludeUserId: disciple.userId,
         mode: 'central_aisle',
       });
       disciple.zone = spot.zone;
       disciple.targetX = spot.x;
-      disciple.targetY = Math.min(58, Math.max(33, spot.y));
+      disciple.targetY = Math.min(58, Math.max(34, spot.y));
       disciple.direction = 'rear';
     }
     this.syncDiscipleToLedger(disciple);
@@ -2399,6 +2668,468 @@ export class SectGameManager {
   }
 
   // ==========================================================================
+  // ĐẠI SỰ KIỆN 1.000 XU – MA GIÁO ĐẠI KIẾP – DIỆT MÔN (5 PHASES, 15 SECONDS)
+  // ==========================================================================
+
+  /**
+   * Triggers the 15-second 5-phase DIỆT MÔN apocalyptic event.
+   * If an event is already running, queues it safely (up to maxQueueSize, deduplicated by userId).
+   */
+  public triggerDietMonEvent(payload: {
+    userId: string;
+    uniqueId?: string;
+    displayName: string;
+    avatarUrl?: string;
+    totalCoins?: number;
+    isDemo?: boolean;
+    isTestMode?: boolean;
+  }): boolean {
+    const cfg = this.config.dietMonConfig || DEFAULT_DIET_MON_CONFIG;
+    if (!cfg.enabled && !payload.isTestMode) {
+      return false;
+    }
+
+    const userId = String(payload.userId || payload.uniqueId || `dm_${Date.now()}`).trim();
+    const uniqueId = String(payload.uniqueId || userId).trim();
+    const displayName = String(payload.displayName || uniqueId).trim();
+    const totalCoins = Math.max(cfg.coinThreshold || 1000, Number(payload.totalCoins || 1000));
+
+    // If Diệt Môn is currently active, queue safely without overlapping
+    if (this.dietMon.isActive) {
+      const maxQ = Math.max(1, cfg.maxQueueSize || 3);
+      if (
+        this.dietMon.triggerUserId !== userId &&
+        !this.dietMonQueue.some(q => q.userId === userId) &&
+        this.dietMonQueue.length < maxQ
+      ) {
+        this.dietMonQueue.push({
+          userId,
+          uniqueId,
+          displayName,
+          avatarUrl: payload.avatarUrl,
+          totalCoins,
+          isDemo: Boolean(payload.isDemo),
+          isTestMode: Boolean(payload.isTestMode),
+        });
+        this.dietMon.queuedCount = this.dietMonQueue.length;
+        this.addLog(
+          'system',
+          `[Hàng chờ Diệt Môn] ${displayName} (${totalCoins} xu)`,
+          `Sự kiện Diệt Môn đang diễn ra — đã xếp hàng chờ tiếp theo (${this.dietMonQueue.length}/${maxQ}).`
+        );
+        this.notify();
+      }
+      return false;
+    }
+
+    const now = Date.now();
+    const durationMs = Math.max(5000, Math.min(30000, (cfg.durationSec || 15) * 1000));
+
+    // 1. Pause Mini-Game & return to Main Hall if a mini-game was active
+    if (this.miniGame.isActive) {
+      this.miniGame.isActive = false;
+      this.activeScene = 'main_hall';
+    }
+    this.isTransitioningScene = false;
+    this.pendingDietMonComments.clear();
+
+    // 2. Sync all present disciples to ledger & prepare their spiral suction start positions
+    const allDisciples = Array.from(this.disciples.values());
+    allDisciples.forEach((d, idx) => {
+      this.syncDiscipleToLedger(d);
+      d.suctionStartX = d.x;
+      d.suctionStartY = d.y;
+      d.suctionOrder = idx;
+      d.vortexProgress = 0;
+      d.vortexAngle = 0;
+      d.targetX = d.x;
+      d.targetY = d.y;
+      d.animation = 'stagger';
+      d.meditationPhase = 'none';
+      d.actionStartedAt = now;
+      d.actionDurationMs = durationMs;
+      d.nextDecisionAt = now + durationMs + 5000;
+    });
+
+    const logEntry: DietMonLogEntry = {
+      id: `dm_${now}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: now,
+      userId,
+      uniqueId,
+      displayName,
+      avatarUrl: payload.avatarUrl,
+      totalCoins,
+      suckedCount: allDisciples.length,
+      suckedDisciplesCount: allDisciples.length,
+      isDemo: Boolean(payload.isDemo || payload.isTestMode),
+      isTest: Boolean(payload.isTestMode),
+    };
+
+    this.dietMon = {
+      isActive: true,
+      phase: 'tremor',
+      startedAt: now,
+      durationMs,
+      elapsedMs: 0,
+      progress: 0,
+      phaseProgress: 0,
+      triggerUserId: userId,
+      triggerUniqueId: uniqueId,
+      triggerDisplayName: displayName,
+      triggerAvatarUrl: payload.avatarUrl,
+      triggerCoins: totalCoins,
+      suckedDisciplesCount: allDisciples.length,
+      hallCleared: false,
+      isTestMode: Boolean(payload.isTestMode),
+      queuedCount: this.dietMonQueue.length,
+      history: [logEntry, ...this.dietMon.history].slice(0, 50),
+    };
+
+    // 3. Phase 1 (0–3s): Hall tremor + Sect Leader shocked jump + sound + TTS
+    if (cfg.enableSoundAndTts !== false) {
+      soundSynthesizer.playThunder();
+      soundSynthesizer.playWarDrum(3);
+      this.triggerSectLeaderSpeech(
+        'diet_mon',
+        { playerName: displayName, leaderName: displayName },
+        'diet_mon',
+        'shocked_jump'
+      );
+    } else {
+      this.triggerSectLeaderAnimation('shocked_jump');
+    }
+
+    this.addLog(
+      'system',
+      `ĐẠI SỰ KIỆN DIỆT MÔN (1.000 XU): ${displayName}`,
+      `Kích hoạt 5 giai đoạn (${Math.round(durationMs / 1000)}s): Rung chuyển -> Sập đại điện -> Avatar giáng thế -> Vòng xoáy hút ${allDisciples.length} môn đồ -> Tái thiết đại điện!`
+    );
+
+    this.notify();
+    return true;
+  }
+
+  /**
+   * Clears all active characters from the hall at the end of Phase 4 (`vortex_suck`),
+   * while preserving 100% of `playerLedger` (coins, ranks), `giftHistory`, and Admin settings.
+   */
+  private clearHallForDietMonVortex() {
+    for (const d of this.disciples.values()) {
+      this.syncDiscipleToLedger(d);
+    }
+    this.disciples.clear();
+    this.waitingQueue = [];
+    this.miniGame.isActive = false;
+    this.miniGame.participantUserIds = [];
+    this.miniGame.completedUserIds = [];
+    this.miniGame.failedUserIds = [];
+    this.miniGame.sweepingPenaltyNames = [];
+
+    // Reset physical main throne occupant (the player's Giáo Chủ rank remains saved in playerLedger)
+    this.sectLeader.hasCustomPlayerLeader = false;
+    this.sectLeader.currentLeaderName = this.config.sectLeader.title;
+    this.sectLeader.currentLeaderUserId = undefined;
+    this.dietMon.hallCleared = true;
+
+    if (this.config.rankAccumulation?.mode === 'persistent') {
+      this.savePersistentLedger();
+    }
+  }
+
+  /**
+   * Completes Phase 5 (`rebuild`) at exact 15s mark: hall is reconstructed and completely empty (0 players),
+   * ready for players to re-enter by commenting once.
+   */
+  private completeDietMonEvent(now: number = Date.now()) {
+    if (!this.dietMon.hallCleared) {
+      this.clearHallForDietMonVortex();
+    }
+
+    const finishedName = this.dietMon.triggerDisplayName;
+    this.dietMon.isActive = false;
+    this.dietMon.phase = 'inactive';
+    this.dietMon.elapsedMs = this.dietMon.durationMs;
+    this.dietMon.progress = 1;
+    this.dietMon.phaseProgress = 1;
+    this.lastDietMonCompletedAt = now;
+
+    // Sect Leader returns to throne to host
+    const thronePos = this.config.sectLeader.thronePosition || { x: 50, y: 22.13 };
+    this.sectLeader.x = thronePos.x;
+    this.sectLeader.y = thronePos.y;
+    this.sectLeader.targetX = thronePos.x;
+    this.sectLeader.targetY = thronePos.y;
+    this.triggerSectLeaderAnimation('return_to_throne');
+
+    this.scheduleNextSceneCycle();
+
+    this.addLog(
+      'system',
+      `Hoàn tất DIỆT MÔN của ${finishedName} — Đại Điện đã khôi phục`,
+      `Quân số hiện tại: 0 người chơi. Bình luận 1 lần để bước từ cổng vào lại Đại Điện với nguyên cấp bậc & tổng xu.`
+    );
+
+    this.notify();
+  }
+
+  /**
+   * Updates the 5 phases of Diệt Môn based on elapsed time:
+   * - Phase 1 (0–3s): 'tremor'
+   * - Phase 2 (3–6s): 'collapse'
+   * - Phase 3 (6–9s): 'avatar_descend'
+   * - Phase 4 (9–12s): 'vortex_suck'
+   * - Phase 5 (12–15s): 'rebuild'
+   */
+  public updateDietMonLifecycle(now: number = Date.now()) {
+    if (!this.dietMon.isActive) {
+      // Check if there is a queued Diệt Môn event waiting after a 2s cooldown
+      if (this.dietMonQueue.length > 0 && now - this.lastDietMonCompletedAt >= 2000) {
+        const nextEvt = this.dietMonQueue.shift()!;
+        this.dietMon.queuedCount = this.dietMonQueue.length;
+        this.triggerDietMonEvent(nextEvt);
+      }
+      return;
+    }
+
+    const cfg = this.config.dietMonConfig || DEFAULT_DIET_MON_CONFIG;
+    const durationMs = Math.max(5000, this.dietMon.durationMs || 15000);
+    const elapsedMs = Math.max(0, now - this.dietMon.startedAt);
+    const progress = Math.min(1, elapsedMs / durationMs);
+    const phaseDur = durationMs / 5; // 3000ms per phase when durationMs = 15000ms
+
+    this.dietMon.elapsedMs = Math.min(durationMs, elapsedMs);
+    this.dietMon.progress = progress;
+
+    if (elapsedMs >= durationMs) {
+      this.completeDietMonEvent(now);
+      return;
+    }
+
+    const prevPhase = this.dietMon.phase;
+    let nextPhase: DietMonPhase = 'tremor';
+    let phaseProgress = 0;
+
+    if (elapsedMs < phaseDur) {
+      nextPhase = 'tremor';
+      phaseProgress = elapsedMs / phaseDur;
+    } else if (elapsedMs < phaseDur * 2) {
+      nextPhase = 'collapse';
+      phaseProgress = (elapsedMs - phaseDur) / phaseDur;
+    } else if (elapsedMs < phaseDur * 3) {
+      nextPhase = 'avatar_descend';
+      phaseProgress = (elapsedMs - phaseDur * 2) / phaseDur;
+    } else if (elapsedMs < phaseDur * 4) {
+      nextPhase = 'vortex_suck';
+      phaseProgress = (elapsedMs - phaseDur * 3) / phaseDur;
+    } else {
+      nextPhase = 'rebuild';
+      phaseProgress = (elapsedMs - phaseDur * 4) / phaseDur;
+    }
+
+    this.dietMon.phase = nextPhase;
+    this.dietMon.phaseProgress = Math.max(0, Math.min(1, phaseProgress));
+
+    // Handle phase transition effects & sounds
+    if (nextPhase !== prevPhase) {
+      if (nextPhase === 'collapse') {
+        if (cfg.enableSoundAndTts !== false) {
+          soundSynthesizer.playThunder();
+        }
+        this.triggerSectLeaderAnimation('comical_rage');
+      } else if (nextPhase === 'avatar_descend') {
+        if (cfg.enableSoundAndTts !== false) {
+          soundSynthesizer.playGong(1.0);
+        }
+        this.triggerSectLeaderAnimation('point_at_player');
+      } else if (nextPhase === 'vortex_suck') {
+        if (cfg.enableSoundAndTts !== false) {
+          soundSynthesizer.playThunder();
+          soundSynthesizer.playWarDrum(2);
+        }
+        this.triggerSectLeaderAnimation('levitate_throne');
+      } else if (nextPhase === 'rebuild') {
+        // At start of Phase 5 (12s), all sucked players have vanished into the central vortex!
+        if (!this.dietMon.hallCleared) {
+          this.clearHallForDietMonVortex();
+        }
+        if (cfg.enableSoundAndTts !== false) {
+          soundSynthesizer.playThroneFanfare();
+        }
+        this.triggerSectLeaderAnimation('return_to_throne');
+      }
+    }
+
+    // During Phase 4 ('vortex_suck', 9–12s): pull all disciples along a spiral trajectory toward center (50, 50)
+    if (nextPhase === 'vortex_suck' && !this.dietMon.hallCleared) {
+      const total = Math.max(1, this.disciples.size);
+      const speedMult = Math.max(0.5, Math.min(2.0, cfg.suctionSpeed || 1.0));
+      let idx = 0;
+      for (const d of this.disciples.values()) {
+        const startX = d.suctionStartX ?? d.x;
+        const startY = d.suctionStartY ?? d.y;
+        const order = d.suctionOrder ?? idx;
+        const waveOffset = (order / total) * 0.28;
+        const localT = Math.max(
+          0,
+          Math.min(1, ((phaseProgress - waveOffset) / Math.max(0.2, 1 - waveOffset)) * speedMult)
+        );
+        const dx = startX - 50;
+        const dy = startY - 50;
+        const baseRadius = Math.hypot(dx, dy);
+        const baseAngle = Math.atan2(dy, dx);
+        const spiralAngle = baseAngle + localT * Math.PI * 3.5;
+        const currentRadius = baseRadius * Math.pow(1 - localT, 1.35);
+
+        d.vortexProgress = localT;
+        d.vortexAngle = spiralAngle;
+        d.x = 50 + Math.cos(spiralAngle) * currentRadius;
+        d.y = 50 + Math.sin(spiralAngle) * currentRadius;
+        d.targetX = 50;
+        d.targetY = 50;
+        idx += 1;
+      }
+    }
+  }
+
+  /**
+   * Advances or sets the elapsed time of an active Diệt Môn event for deterministic automated testing
+   * and immediate phase inspection.
+   */
+  public advanceDietMonByMs(deltaMs: number) {
+    if (!this.dietMon.isActive) return;
+    this.dietMon.startedAt -= Math.max(0, deltaMs);
+    this.updateDietMonLifecycle(Date.now());
+    this.notify();
+  }
+
+  /**
+   * Processes any comments buffered during the 15s Diệt Môn event (if any).
+   */
+  public flushPendingDietMonComments(): number {
+    if (this.dietMon.isActive || this.pendingDietMonComments.size === 0) return 0;
+    const queued = Array.from(this.pendingDietMonComments.values());
+    this.pendingDietMonComments.clear();
+    for (const evt of queued) {
+      this.handleCommentEvent(evt);
+    }
+    return queued.length;
+  }
+
+  /**
+   * Admin Action: Triggers a test Diệt Môn event safely (spawning demo disciples if the hall is empty so the vortex suction can be seen).
+   * Supports calling with 0-2 args `(displayName, avatarUrl)` or 3 args `(userId, displayName, avatarUrl)`.
+   */
+  public triggerTestDietMon(
+    arg1 = 'Thiên Ma Chí Tôn',
+    arg2?: string,
+    arg3?: string
+  ): DietMonRuntimeState {
+    if (this.disciples.size === 0) {
+      this.spawnDemoPlayers(18);
+    }
+    const isThreeArgCall =
+      arg3 !== undefined || (arg2 !== undefined && !arg2.startsWith('http') && !arg2.startsWith('/'));
+    const userId = isThreeArgCall ? arg1 : `test_dietmon_${Date.now()}`;
+    const displayName = isThreeArgCall ? arg2 || 'Thiên Ma Chí Tôn' : arg1 || 'Thiên Ma Chí Tôn';
+    const avatarUrl = isThreeArgCall ? arg3 : arg2;
+
+    this.triggerDietMonEvent({
+      userId,
+      uniqueId: userId,
+      displayName,
+      avatarUrl,
+      totalCoins: this.config.dietMonConfig?.coinThreshold || 1000,
+      isDemo: true,
+      isTestMode: true,
+    });
+    return { ...this.dietMon };
+  }
+
+  /**
+   * Admin Action: Emergency stop for Diệt Môn — cancels the active event and restores the hall immediately.
+   */
+  public stopDietMonEmergency() {
+    this.dietMonQueue = [];
+    this.pendingDietMonComments.clear();
+    if (!this.dietMon.isActive) {
+      this.notify();
+      return;
+    }
+    this.dietMon.isActive = false;
+    this.dietMon.phase = 'inactive';
+    this.dietMon.elapsedMs = 0;
+    this.dietMon.progress = 0;
+    this.dietMon.phaseProgress = 0;
+    this.dietMon.queuedCount = 0;
+
+    // Restore any remaining disciples to normal free roam
+    this.disperseDisciplesToFreeRoam();
+    const thronePos = this.config.sectLeader.thronePosition || { x: 50, y: 22.13 };
+    this.sectLeader.x = thronePos.x;
+    this.sectLeader.y = thronePos.y;
+    this.sectLeader.targetX = thronePos.x;
+    this.sectLeader.targetY = thronePos.y;
+    this.triggerSectLeaderAnimation('idle_throne');
+
+    this.addLog('system', 'Dừng khẩn cấp sự kiện DIỆT MÔN', 'Đại điện đã trở lại trạng thái bình thường.');
+    this.notify();
+  }
+
+  /**
+   * Admin Action: Immediately finishes hall reconstruction and empties sucked characters so the hall is ready.
+   */
+  public rebuildHallImmediately() {
+    this.dietMonQueue = [];
+    this.completeDietMonEvent(Date.now());
+  }
+
+  /**
+   * Updates DietMonConfig from Admin controls.
+   */
+  public setDietMonConfig(patch: Partial<DietMonConfig>): DietMonConfig {
+    const prev = this.config.dietMonConfig || DEFAULT_DIET_MON_CONFIG;
+    const enableCollapseEffect =
+      patch.enableCollapseEffect ?? patch.enableHallCollapse ?? prev.enableCollapseEffect ?? true;
+    const showCenterAvatar =
+      patch.showCenterAvatar ?? patch.showBigAvatar ?? prev.showCenterAvatar ?? true;
+    const enableVortexEffect =
+      patch.enableVortexEffect ?? patch.enableVortexSuck ?? prev.enableVortexEffect ?? true;
+    const enableRebuildEffect =
+      patch.enableRebuildEffect ?? patch.enableAutoRebuild ?? prev.enableRebuildEffect ?? true;
+    const rawCommentMode =
+      patch.commentHandlingDuringEvent ?? patch.commentHandlingMode ?? prev.commentHandlingDuringEvent ?? 'queue_after';
+    const normalizedCommentMode: DietMonCommentMode =
+      rawCommentMode === 'ignore' || rawCommentMode === 'ignore_during'
+        ? 'ignore_during'
+        : 'queue_after';
+
+    this.config.dietMonConfig = {
+      ...prev,
+      ...patch,
+      enableCollapseEffect,
+      enableHallCollapse: enableCollapseEffect,
+      showCenterAvatar,
+      showBigAvatar: showCenterAvatar,
+      enableVortexEffect,
+      enableVortexSuck: enableVortexEffect,
+      enableRebuildEffect,
+      enableAutoRebuild: enableRebuildEffect,
+      commentHandlingDuringEvent: normalizedCommentMode,
+      commentHandlingMode: rawCommentMode,
+      coinThreshold: Math.max(
+        10,
+        Number(patch.coinThreshold ?? prev.coinThreshold ?? 1000)
+      ),
+      durationSec: Math.max(
+        5,
+        Math.min(30, Number(patch.durationSec ?? prev.durationSec ?? 15))
+      ),
+    };
+    this.notify();
+    return { ...this.config.dietMonConfig };
+  }
+
+  // ==========================================================================
   // MAIN GAME LOOP (MOVEMENT, RADIAL SEPARATION, AUTONOMOUS AI LIFECYCLE)
   // ==========================================================================
   public tick() {
@@ -2411,6 +3142,15 @@ export class SectGameManager {
       this.fps = Math.min(60, Math.max(30, this.frameCounter * 6));
       this.frameCounter = 0;
       this.lastFpsMeasureAt = now;
+    }
+
+    // 0. Update 15-Second DIỆT MÔN Apocalyptic Event if active (pausing normal AI/minigames)
+    if (this.dietMon.isActive || this.dietMonQueue.length > 0) {
+      this.updateDietMonLifecycle(now);
+      if (this.dietMon.isActive) {
+        this.notify();
+        return;
+      }
     }
 
     // 1. Update Sect Leader position & animation revert to idle_throne
@@ -2779,17 +3519,17 @@ export class SectGameManager {
         d.zone = pos.zone;
         // Give ~25% of them varied ranks for visual variety when spawning larger crowds
         if (i > 0 && i % 11 === 0) {
-          this.applyRankToDisciple(d, 'dai_truong_lao');
+          this.applyRankToDisciple(d, 'truong_lao');
           d.x = pos.x;
           d.y = pos.y;
         } else if (i > 0 && i % 7 === 0) {
-          this.applyRankToDisciple(d, 'ho_phap_ma_giao');
+          this.applyRankToDisciple(d, 'ho_phap');
           d.x = pos.x;
           d.y = pos.y;
         } else if (i > 0 && i % 5 === 0) {
-          this.applyRankToDisciple(d, 'tinh_anh_de_tu');
+          this.applyRankToDisciple(d, 'tinh_anh');
         } else if (i > 0 && i % 3 === 0) {
-          this.applyRankToDisciple(d, 'noi_mon_de_tu');
+          this.applyRankToDisciple(d, 'chan_truyen');
         }
         this.assignNextAutonomousAction(d, now + (i % 5) * 300, i % 3 === 0);
       }
@@ -2999,6 +3739,11 @@ export class SectGameManager {
     this.giftHistory = [];
     this.processedGiftEventIds.clear();
     this.processedStreakTotals.clear();
+    this.triggeredDietMonUserIds.clear();
+    this.dietMonQueue = [];
+    this.pendingDietMonComments.clear();
+    this.dietMon.isActive = false;
+    this.dietMon.phase = 'inactive';
     if (this.config.rankAccumulation?.mode !== 'persistent') {
       this.playerLedger.clear();
     }
@@ -3017,6 +3762,7 @@ export class SectGameManager {
     const baseRank = this.config.ranks[0];
     if (targetUserId) {
       const uid = targetUserId.trim();
+      this.triggeredDietMonUserIds.delete(uid);
       const d = this.disciples.get(uid) || this.waitingQueue.find(w => w.userId === uid);
       if (d) {
         d.totalCoins = 0;
@@ -3063,6 +3809,7 @@ export class SectGameManager {
     this.playerLedger.clear();
     this.processedGiftEventIds.clear();
     this.processedStreakTotals.clear();
+    this.triggeredDietMonUserIds.clear();
     this.sectLeader.hasCustomPlayerLeader = false;
     this.sectLeader.currentLeaderName = this.config.sectLeader.title;
     this.sectLeader.currentLeaderUserId = undefined;
@@ -3102,6 +3849,11 @@ export class SectGameManager {
    * - 'persistent' mode: preserves playerLedger, giftHistory, promotions, and processedEventIds across restarts.
    */
   public simulateSessionRestart() {
+    this.dietMon.isActive = false;
+    this.dietMon.phase = 'inactive';
+    this.dietMonQueue = [];
+    this.pendingDietMonComments.clear();
+
     if (this.config.rankAccumulation?.mode === 'persistent') {
       this.savePersistentLedger();
       this.disciples.clear();
@@ -3111,6 +3863,7 @@ export class SectGameManager {
       this.promotions = [];
       this.processedGiftEventIds.clear();
       this.processedStreakTotals.clear();
+      this.triggeredDietMonUserIds.clear();
       this.loadPersistentLedgerIfAvailable();
       this.addLog(
         'system',
@@ -3125,6 +3878,7 @@ export class SectGameManager {
       this.promotions = [];
       this.processedGiftEventIds.clear();
       this.processedStreakTotals.clear();
+      this.triggeredDietMonUserIds.clear();
       this.sectLeader.hasCustomPlayerLeader = false;
       this.sectLeader.currentLeaderName = this.config.sectLeader.title;
       this.sectLeader.currentLeaderUserId = undefined;
@@ -3142,10 +3896,11 @@ export class SectGameManager {
    */
   public exportRankAndLedgerData() {
     return {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       ranks: structuredClone(this.config.ranks),
       rankAccumulation: structuredClone(this.config.rankAccumulation),
+      dietMonConfig: structuredClone(this.config.dietMonConfig),
       playerLedger: Array.from(this.playerLedger.values()),
       giftHistory: structuredClone(this.giftHistory),
       promotions: structuredClone(this.promotions),
@@ -3158,7 +3913,7 @@ export class SectGameManager {
   public importRankAndLedgerData(data: Record<string, unknown>): boolean {
     if (!data || typeof data !== 'object') return false;
 
-    if (Array.isArray(data.ranks) && data.ranks.length === 9) {
+    if (Array.isArray(data.ranks) && data.ranks.length >= 8) {
       this.config.ranks = structuredClone(data.ranks as RankTierConfig[]);
     }
     if (data.rankAccumulation && typeof data.rankAccumulation === 'object') {
@@ -3167,11 +3922,25 @@ export class SectGameManager {
         ...(data.rankAccumulation as Partial<RankAccumulationConfig>),
       };
     }
+    if (data.dietMonConfig && typeof data.dietMonConfig === 'object') {
+      this.config.dietMonConfig = {
+        ...DEFAULT_DIET_MON_CONFIG,
+        ...(data.dietMonConfig as Partial<DietMonConfig>),
+      };
+    }
     if (Array.isArray(data.playerLedger)) {
       this.playerLedger.clear();
       for (const item of data.playerLedger as PlayerLedgerRecord[]) {
         if (item && item.userId) {
-          this.playerLedger.set(item.userId, { ...item });
+          const normalizedId = this.normalizeRankTierId(item.rankId);
+          const rankDef =
+            this.config.ranks.find(r => r.id === normalizedId) ||
+            this.computeRankForCoins(item.totalCoins);
+          this.playerLedger.set(item.userId, {
+            ...item,
+            rankId: rankDef.id,
+            rankName: rankDef.name,
+          });
         }
       }
     }
@@ -3211,13 +3980,16 @@ export class SectGameManager {
 
   public resetRanksToDefault() {
     this.config.ranks = structuredClone(DEFAULT_RANKS);
+    this.config.dietMonConfig = structuredClone(DEFAULT_DIET_MON_CONFIG);
     for (const d of this.disciples.values()) {
-      if (!d.isSectLeader) {
-        const nextRank = this.computeRankForCoins(d.totalCoins);
-        this.applyRankToDisciple(d, nextRank.id);
-      }
+      const nextRank = this.computeRankForCoins(d.totalCoins);
+      this.applyRankToDisciple(d, nextRank.id);
     }
-    this.addLog('system', 'Đã khôi phục 9 mốc cấp bậc mặc định', '0 / 1 / 5 / 10 / 20 / 50 / 99 / 199 / Tân Giáo Chủ.');
+    this.addLog(
+      'system',
+      'Đã khôi phục Bảng Cấp Bậc Chính Thức (0..199 Xu) & Đại Sự Kiện DIỆT MÔN (1.000 Xu)',
+      '0 Dân Đen / 1 Đệ Tử / 5 Chân Truyền / 10 Tinh Anh / 20 Hộ Pháp / 50 Trưởng Lão / 99 Đồng Tôn / 199 Giáo Chủ / 1.000 DIỆT MÔN.'
+    );
     this.notify();
   }
 
@@ -3301,12 +4073,14 @@ export class SectGameManager {
         userId: d.userId,
         uniqueId: d.uniqueId,
         displayName: d.displayName,
+        avatarUrl: d.avatarUrl,
         totalCoins: d.totalCoins,
         giftCount: d.giftCount,
         rankId: d.rankId,
         rankName: d.rankName,
         isCoLeader: d.isCoLeader,
-        isSectLeader: d.isSectLeader,
+        isSectLeader: d.isSectLeader || d.rankId === 'giao_chu' || d.rankId === 'tan_giao_chu',
+        triggeredDietMon: this.triggeredDietMonUserIds.has(d.userId),
         isDemo: d.isDemo,
         updatedAt: d.lastActiveAt,
       });
@@ -3334,6 +4108,10 @@ export class SectGameManager {
       giftHistory: [...this.giftHistory],
       playerLedger: playerLedgerList,
       miniGame: { ...this.miniGame },
+      dietMon: {
+        ...this.dietMon,
+        history: [...this.dietMon.history],
+      },
       logs: [...this.logs],
       fps: this.fps,
     };

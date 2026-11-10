@@ -45,12 +45,13 @@ console.log('===================================================================
 const gm = new SectGameManager();
 
 // 1-8. Foundation, Admin 20 tabs, OBS Sync Store, Demo Mode, TikTok Sanitizer
-runTest(1, 'Cấu trúc Dự án & Master Config khởi tạo chuẩn', () => {
+runTest(1, 'Cấu trúc Dự án & Master Config khởi tạo chuẩn (8 Cấp Bậc Chính Thức + Sự Kiện Diệt Môn 1.000 Xu)', () => {
   const cfg = gm.getConfig();
-  assert.equal(cfg.ranks.length, 9, 'Phải có đúng 9 cấp bậc');
+  assert.equal(cfg.ranks.length, 8, 'Bảng cấp bậc chính thức phải có đúng 8 cấp (0..199 xu)');
+  assert.equal(cfg.dietMonConfig?.coinThreshold, 1000, 'Mốc sự kiện Diệt Môn mặc định phải là 1.000 xu');
   assert.equal(cfg.sectLeaderAnimations.length, 35, 'Phải có đúng 35 hoạt ảnh Giáo Chủ');
   assert.equal(cfg.miniGames.length, 3, 'Phải có đúng 3 Mini Game');
-  return `9 cấp bậc, 35 hoạt ảnh Giáo Chủ, 3 Mini Game đã nạp.`;
+  return `8 cấp bậc chính thức (0..199 xu), Diệt Môn 1.000 xu, 35 hoạt ảnh Giáo Chủ, 3 Mini Game đã nạp.`;
 });
 
 runTest(2, 'Kiểm tra Hệ thống 20 Hạng Mục Quản Trị (Admin Categories)', () => {
@@ -219,15 +220,15 @@ runTest(14, 'Tên dưới chân nhân vật tối đa 5 ký tự & chống chồ
   return `Cắt tên 5 ký tự ("${compact}") & tách nhãn trùng tọa độ thành công.`;
 });
 
-// 15-21. Hệ thống Quà 1, 5, 10, 20, 50, 99, 199 xu phong đúng cấp
+// 15-21. Hệ thống Quà 1, 5, 10, 20, 50, 99, 199 xu phong đúng cấp bậc chính thức mới
 const rankGiftTests: { testId: number; coins: number; expectedRankId: string; expectedRankName: string }[] = [
-  { testId: 15, coins: 1, expectedRankId: 'ngoai_mon_do_de', expectedRankName: 'Ngoại Môn Đồ Đệ' },
-  { testId: 16, coins: 5, expectedRankId: 'noi_mon_de_tu', expectedRankName: 'Nội Môn Đệ Tử' },
-  { testId: 17, coins: 10, expectedRankId: 'su_huynh_su_ty', expectedRankName: 'Sư Huynh / Sư Tỷ' },
-  { testId: 18, coins: 20, expectedRankId: 'tinh_anh_de_tu', expectedRankName: 'Tinh Anh Đệ Tử' },
-  { testId: 19, coins: 50, expectedRankId: 'ho_phap_ma_giao', expectedRankName: 'Hộ Pháp Ma Giáo' },
-  { testId: 20, coins: 99, expectedRankId: 'dai_truong_lao', expectedRankName: 'Đại Trưởng Lão' },
-  { testId: 21, coins: 199, expectedRankId: 'dong_ton_giao_chu', expectedRankName: 'Đồng Tôn Giáo Chủ' },
+  { testId: 15, coins: 1, expectedRankId: 'de_tu', expectedRankName: 'Đệ Tử' },
+  { testId: 16, coins: 5, expectedRankId: 'chan_truyen', expectedRankName: 'Chân Truyền' },
+  { testId: 17, coins: 10, expectedRankId: 'tinh_anh', expectedRankName: 'Tinh Anh' },
+  { testId: 18, coins: 20, expectedRankId: 'ho_phap', expectedRankName: 'Hộ Pháp' },
+  { testId: 19, coins: 50, expectedRankId: 'truong_lao', expectedRankName: 'Trưởng Lão' },
+  { testId: 20, coins: 99, expectedRankId: 'dong_ton', expectedRankName: 'Đồng Tôn' },
+  { testId: 21, coins: 199, expectedRankId: 'giao_chu', expectedRankName: 'Giáo Chủ' },
 ];
 
 for (const rt of rankGiftTests) {
@@ -246,16 +247,20 @@ for (const rt of rankGiftTests) {
     });
     assert.equal(res.disciple.rankId, rt.expectedRankId);
     assert.equal(res.disciple.rankName, rt.expectedRankName);
+    if (rt.coins === 99) {
+      assert.equal(res.disciple.isCoLeader, true, '99 xu phải là Đồng Tôn');
+      assert.equal(res.disciple.zone, 'co_leader_dais', '99 xu phải đứng ở Đài Đồng Tôn cạnh Ngai Vàng');
+    }
     if (rt.coins === 199) {
-      assert.equal(res.disciple.isCoLeader, true, '199 xu phải là Đồng Tôn Giáo Chủ');
-      assert.equal(res.disciple.zone, 'co_leader_dais', '199 xu phải đứng ở Đài Đồng Tôn cạnh Ngai Vàng');
+      assert.equal(res.disciple.isSectLeader, true, '199 xu phải đạt cấp cao nhất Giáo Chủ');
+      assert.equal(res.throneTransferred, true, '199 xu phải kích hoạt nghi thức truyền ngôi Giáo Chủ');
     }
     return `Phong cấp "${res.disciple.rankName}" (Zone: ${res.disciple.zone}) chính xác.`;
   });
 }
 
-// 22. Quà 1000+ xu / Gift ID chỉ định chuyển giao ngai Tân Giáo Chủ đúng
-runTest(22, 'Quà Chí Tôn chuyển giao Ngai Vàng cho Tân Giáo Chủ & Cựu Giáo Chủ thành Thái Thượng Giáo Chủ', () => {
+// 22. Quà 199+ xu / Gift ID chỉ định chuyển giao ngai Giáo Chủ & Cựu Giáo Chủ thành Thái Thượng Giáo Chủ
+runTest(22, 'Quà 199+ xu chuyển giao Ngai Vàng cho Giáo Chủ mới & Cựu Giáo Chủ thành Thái Thượng Giáo Chủ', () => {
   const res = gm.handleGiftEvent({
     id: 'g_supreme_throne',
     type: 'gift',
@@ -263,18 +268,18 @@ runTest(22, 'Quà Chí Tôn chuyển giao Ngai Vàng cho Tân Giáo Chủ & Cự
     userId: 'user_dong_phuong',
     uniqueId: 'dong_phuong',
     nickname: 'Đông Phương Bất Bại',
-    giftId: 9999,
-    giftName: 'Long Ngai Chí Tôn',
-    coinValue: 1000,
+    giftId: 6007,
+    giftName: 'Phượng Hoàng Lệnh',
+    coinValue: 199,
     giftCount: 1,
   });
   assert.equal(res.throneTransferred, true, 'Phải kích hoạt chuyển giao ngai vàng');
-  assert.equal(res.disciple.rankId, 'tan_giao_chu');
+  assert.equal(res.disciple.rankId, 'giao_chu');
   assert.equal(res.disciple.isSectLeader, true);
   const snap = gm.getSnapshot();
   assert.ok(snap.sectLeader.currentLeaderName.includes('Đông Phương Bất Bại'));
   assert.ok(snap.sectLeader.formerLeaderName.includes('Thái Thượng Giáo Chủ'));
-  return `Tân Giáo Chủ: "${snap.sectLeader.currentLeaderName}" | Cựu: "${snap.sectLeader.formerLeaderName}".`;
+  return `Giáo Chủ mới: "${snap.sectLeader.currentLeaderName}" | Cựu: "${snap.sectLeader.formerLeaderName}".`;
 });
 
 // 23. Giáo Chủ có đủ 35 hoạt ảnh hoạt động được
@@ -293,7 +298,11 @@ runTest(23, 'Giáo Chủ có đủ 35 hoạt ảnh (Nhóm A, B, C, D, E) kích h
 runTest(24, 'Kho 400+ câu thoại Giáo Chủ riêng biệt (không trùng lặp) & nội suy biến không đọc dấu {}', () => {
   assert.ok(DEFAULT_SECT_DIALOGUE_BANK.length >= 400, 'Tổng số câu thoại phải >= 400');
   const uniqueTexts = new Set(DEFAULT_SECT_DIALOGUE_BANK.map(l => l.text.trim()));
-  assert.equal(uniqueTexts.size, 400, 'Cả 400 câu thoại phải hoàn toàn riêng biệt, không trùng lặp');
+  assert.equal(
+    uniqueTexts.size,
+    DEFAULT_SECT_DIALOGUE_BANK.length,
+    'Tất cả câu thoại (bao gồm Diệt Môn) phải hoàn toàn riêng biệt, không trùng lặp'
+  );
 
   const sample = interpolateDialogueTemplate(
     'Chào {playerName} bậc {rankName} tặng {giftName} cho {leaderName} trong {gameName}!',
@@ -437,7 +446,7 @@ runTest(30, 'Hình phạt tối đa 5 đệ tử quét sân & bình luận lại
   // Verify no coin or rank loss for firstPlayer
   const checkFirst = afterLose.disciples.find(d => d.userId === firstPlayer.userId)!;
   assert.equal(checkFirst.totalCoins, 50, 'Không được trừ xu khi thua mini game');
-  assert.equal(checkFirst.rankId, 'ho_phap_ma_giao', 'Không được hạ cấp khi thua mini game');
+  assert.equal(checkFirst.rankId, 'truong_lao', 'Không được hạ cấp khi thua mini game');
 
   // Now penalizedOne comments again -> must immediately return from sweep with 0 gift required!
   const releaseRes = gm.handleCommentEvent({
@@ -670,8 +679,8 @@ runTest(40, 'Admin Test nhiều User bình luận cùng lúc (10 & 80 User) + X�
   return 'Đồng loạt 10 & 80 User bình luận cùng lúc và xóa riêng từng User test hoạt động hoàn hảo.';
 });
 
-// 41. Kiểm thử Cộng Dồn Xu 1 + 5 + 5 = 11 xu -> cấp 10 (Sư Huynh / Sư Tỷ) & Không phong chức lặp lại nếu cùng cấp
-runTest(41, 'Cộng dồn xu: 1 + 5 + 5 = 11 xu ➔ đạt cấp 10 "Sư Huynh / Sư Tỷ" & không phong chức lặp nếu vẫn cùng cấp', () => {
+// 41. Kiểm thử Cộng Dồn Xu 1 + 5 + 5 = 11 xu -> cấp 10 (Tinh Anh) & Không phong chức lặp lại nếu cùng cấp
+runTest(41, 'Cộng dồn xu: 1 + 5 + 5 = 11 xu ➔ đạt cấp 10 "Tinh Anh" & không phong chức lặp nếu vẫn cùng cấp', () => {
   gm.clearAllPlayers();
   const uid = 'accum_user_11';
   const r1 = gm.handleGiftEvent({
@@ -686,7 +695,7 @@ runTest(41, 'Cộng dồn xu: 1 + 5 + 5 = 11 xu ➔ đạt cấp 10 "Sư Huynh /
     giftCount: 1,
   });
   assert.equal(r1.disciple.totalCoins, 1);
-  assert.equal(r1.disciple.rankId, 'ngoai_mon_do_de');
+  assert.equal(r1.disciple.rankId, 'de_tu');
   assert.equal(r1.promoted, true);
 
   const r2 = gm.handleGiftEvent({
@@ -701,7 +710,7 @@ runTest(41, 'Cộng dồn xu: 1 + 5 + 5 = 11 xu ➔ đạt cấp 10 "Sư Huynh /
     giftCount: 1,
   });
   assert.equal(r2.disciple.totalCoins, 6, '1 + 5 phải bằng 6 xu');
-  assert.equal(r2.disciple.rankId, 'noi_mon_de_tu');
+  assert.equal(r2.disciple.rankId, 'chan_truyen');
   assert.equal(r2.promoted, true);
 
   const r3 = gm.handleGiftEvent({
@@ -716,8 +725,8 @@ runTest(41, 'Cộng dồn xu: 1 + 5 + 5 = 11 xu ➔ đạt cấp 10 "Sư Huynh /
     giftCount: 1,
   });
   assert.equal(r3.disciple.totalCoins, 11, '1 + 5 + 5 phải bằng 11 xu');
-  assert.equal(r3.disciple.rankId, 'su_huynh_su_ty', '11 xu phải đạt mốc 10 xu (Sư Huynh / Sư Tỷ)');
-  assert.equal(r3.disciple.rankName, 'Sư Huynh / Sư Tỷ');
+  assert.equal(r3.disciple.rankId, 'tinh_anh', '11 xu phải đạt mốc 10 xu (Tinh Anh)');
+  assert.equal(r3.disciple.rankName, 'Tinh Anh');
   assert.equal(r3.promoted, true);
 
   // Send +2 xu more (total 13 xu, still below 20 xu threshold) -> must NOT repeat promotion
@@ -734,18 +743,18 @@ runTest(41, 'Cộng dồn xu: 1 + 5 + 5 = 11 xu ➔ đạt cấp 10 "Sư Huynh /
     giftCount: 1,
   });
   assert.equal(r4.disciple.totalCoins, 13);
-  assert.equal(r4.disciple.rankId, 'su_huynh_su_ty');
+  assert.equal(r4.disciple.rankId, 'tinh_anh');
   assert.equal(r4.promoted, false, 'Không được phong chức lặp lại nếu người chơi vẫn ở cùng cấp');
   assert.equal(gm.getSnapshot().promotions.length, promoCountBefore, 'Số lượng thông báo thăng cấp không tăng khi giữ nguyên cấp');
 
-  return '1 + 5 + 5 = 11 xu ➔ Sư Huynh / Sư Tỷ (mốc 10 xu) & chặn phong chức lặp khi vẫn cùng cấp.';
+  return '1 + 5 + 5 = 11 xu ➔ Tinh Anh (mốc 10 xu) & chặn phong chức lặp khi vẫn cùng cấp.';
 });
 
-// 42. Kiểm thử Cộng Dồn Xu 90 + 10 = 100 xu -> cấp 99 (Đại Trưởng Lão) & chỉ phát 1 hoạt cảnh khi vượt nhiều mốc
-runTest(42, 'Cộng dồn xu: 90 + 10 = 100 xu ➔ đạt cấp 99 "Đại Trưởng Lão" & vượt nhiều mốc chỉ phát 1 thông báo cao nhất', () => {
+// 42. Kiểm thử Cộng Dồn Xu 90 + 10 = 100 xu -> cấp 99 (Đồng Tôn) & chỉ phát 1 hoạt cảnh khi vượt nhiều mốc
+runTest(42, 'Cộng dồn xu: 90 + 10 = 100 xu ➔ đạt cấp 99 "Đồng Tôn" & vượt nhiều mốc chỉ phát 1 thông báo cao nhất', () => {
   gm.clearAllPlayers();
   const uid = 'accum_user_100';
-  // First gift of 90 xu jumps across 1, 5, 10, 20, 50 directly to Hộ Pháp Ma Giáo (50 xu) with ONLY 1 promotion announcement
+  // First gift of 90 xu jumps across 1, 5, 10, 20, 50 directly to Trưởng Lão (50 xu) with ONLY 1 promotion announcement
   const r1 = gm.handleGiftEvent({
     id: 'acc_100_1',
     type: 'gift',
@@ -758,7 +767,7 @@ runTest(42, 'Cộng dồn xu: 90 + 10 = 100 xu ➔ đạt cấp 99 "Đại Trư�
     giftCount: 1,
   });
   assert.equal(r1.disciple.totalCoins, 90);
-  assert.equal(r1.disciple.rankId, 'ho_phap_ma_giao', '90 xu đạt mốc 50 xu Hộ Pháp Ma Giáo');
+  assert.equal(r1.disciple.rankId, 'truong_lao', '90 xu đạt mốc 50 xu Trưởng Lão');
   assert.equal(gm.getSnapshot().promotions.length, 1, 'Vượt qua 5 mốc trong 1 sự kiện chỉ được phát đúng 1 hoạt cảnh phong chức lên cấp cao nhất');
 
   const r2 = gm.handleGiftEvent({
@@ -773,14 +782,16 @@ runTest(42, 'Cộng dồn xu: 90 + 10 = 100 xu ➔ đạt cấp 99 "Đại Trư�
     giftCount: 1,
   });
   assert.equal(r2.disciple.totalCoins, 100, '90 + 10 phải bằng 100 xu');
-  assert.equal(r2.disciple.rankId, 'dai_truong_lao', '100 xu phải đạt cấp 99 xu Đại Trưởng Lão');
-  assert.equal(r2.disciple.rankName, 'Đại Trưởng Lão');
+  assert.equal(r2.disciple.rankId, 'dong_ton', '100 xu phải đạt cấp 99 xu Đồng Tôn');
+  assert.equal(r2.disciple.rankName, 'Đồng Tôn');
+  assert.equal(r2.disciple.isCoLeader, true);
+  assert.equal(r2.disciple.zone, 'co_leader_dais');
   assert.equal(r2.promoted, true);
-  return '90 + 10 = 100 xu ➔ Đại Trưởng Lão (mốc 99 xu) chính xác.';
+  return '90 + 10 = 100 xu ➔ Đồng Tôn (mốc 99 xu, đứng Đài Đồng Tôn) chính xác.';
 });
 
-// 43. Kiểm thử Cộng Dồn Xu 190 + 10 = 200 xu -> cấp 199 (Đồng Tôn Giáo Chủ)
-runTest(43, 'Cộng dồn xu: 190 + 10 = 200 xu ➔ đạt cấp 199 "Đồng Tôn Giáo Chủ" (Đứng Đài Danh Dự)', () => {
+// 43. Kiểm thử Cộng Dồn Xu 190 + 10 = 200 xu -> cấp 199 (Giáo Chủ)
+runTest(43, 'Cộng dồn xu: 190 + 10 = 200 xu ➔ đạt cấp 199 "Giáo Chủ" (Chuyển giao Ngai Vàng)', () => {
   gm.clearAllPlayers();
   const uid = 'accum_user_200';
   const r1 = gm.handleGiftEvent({
@@ -795,7 +806,7 @@ runTest(43, 'Cộng dồn xu: 190 + 10 = 200 xu ➔ đạt cấp 199 "Đồng T�
     giftCount: 1,
   });
   assert.equal(r1.disciple.totalCoins, 190);
-  assert.equal(r1.disciple.rankId, 'dai_truong_lao');
+  assert.equal(r1.disciple.rankId, 'dong_ton');
 
   const r2 = gm.handleGiftEvent({
     id: 'acc_200_2',
@@ -809,11 +820,11 @@ runTest(43, 'Cộng dồn xu: 190 + 10 = 200 xu ➔ đạt cấp 199 "Đồng T�
     giftCount: 1,
   });
   assert.equal(r2.disciple.totalCoins, 200, '190 + 10 phải bằng 200 xu');
-  assert.equal(r2.disciple.rankId, 'dong_ton_giao_chu', '200 xu phải đạt cấp 199 xu Đồng Tôn Giáo Chủ');
-  assert.equal(r2.disciple.rankName, 'Đồng Tôn Giáo Chủ');
-  assert.equal(r2.disciple.isCoLeader, true);
-  assert.equal(r2.disciple.zone, 'co_leader_dais');
-  return '190 + 10 = 200 xu ➔ Đồng Tôn Giáo Chủ (mốc 199 xu, zone: co_leader_dais).';
+  assert.equal(r2.disciple.rankId, 'giao_chu', '200 xu phải đạt cấp 199 xu Giáo Chủ');
+  assert.equal(r2.disciple.rankName, 'Giáo Chủ');
+  assert.equal(r2.disciple.isSectLeader, true);
+  assert.equal(r2.throneTransferred, true);
+  return '190 + 10 = 200 xu ➔ Giáo Chủ (mốc 199 xu, đăng cơ Ngai Vàng).';
 });
 
 // 44. Cùng một sự kiện quà được gửi lặp & Combo Streak trùng -> Không cộng trùng
@@ -917,7 +928,7 @@ runTest(45, 'Nhiều quà tới đồng thời tính tổng chính xác & Đổi
 
   const beforeScene = gm.getSnapshot().disciples.find(d => d.userId === uid)!;
   assert.equal(beforeScene.totalCoins, 100, 'Tổng 5 + 10 + 15 + 20 + 50 phải đúng bằng 100 xu');
-  assert.equal(beforeScene.rankId, 'dai_truong_lao');
+  assert.equal(beforeScene.rankId, 'dong_ton');
 
   // Switch scene to training ground, run mini-game, finish mini-game, switch back to main hall
   gm.startMiniGame('ma_quyen_loan_vu');
@@ -927,7 +938,7 @@ runTest(45, 'Nhiều quà tới đồng thời tính tổng chính xác & Đổi
 
   const afterScene = gm.getSnapshot().disciples.find(d => d.userId === uid)!;
   assert.equal(afterScene.totalCoins, 100, 'Đổi cảnh và kết thúc Mini Game không được mất tổng xu');
-  assert.equal(afterScene.rankId, 'dai_truong_lao', 'Đổi cảnh không được mất cấp bậc');
+  assert.equal(afterScene.rankId, 'dong_ton', 'Đổi cảnh không được mất cấp bậc');
   return 'Tổng nhiều quà đồng thời = 100 xu chính xác & giữ nguyên 100% qua các lần chuyển cảnh.';
 });
 
@@ -950,7 +961,7 @@ runTest(46, 'Khởi động lại: Giữ bền vững tổng xu/cấp bậc & ch
     giftCount: 1,
   });
   assert.equal(gm.getSnapshot().disciples[0].totalCoins, 195);
-  assert.equal(gm.getSnapshot().disciples[0].rankId, 'dai_truong_lao');
+  assert.equal(gm.getSnapshot().disciples[0].rankId, 'dong_ton');
 
   // Simulate restart in 'persistent' mode
   gm.simulateSessionRestart();
@@ -971,7 +982,7 @@ runTest(46, 'Khởi động lại: Giữ bền vững tổng xu/cấp bậc & ch
   });
   assert.equal(dupAfterRestart.duplicateIgnored, true, 'Không được tính lại sự kiện cũ sau khi khởi động lại');
 
-  // User comments to enter hall in new session -> automatically restores 195 xu & Đại Trưởng Lão!
+  // User comments to enter hall in new session -> automatically restores 195 xu & Đồng Tôn!
   const rejoin = gm.handleCommentEvent({
     id: 'rejoin_cmt_1',
     type: 'comment',
@@ -982,9 +993,9 @@ runTest(46, 'Khởi động lại: Giữ bền vững tổng xu/cấp bậc & ch
     comment: 'Ta đã trở lại!',
   });
   assert.equal(rejoin.disciple?.totalCoins, 195, 'Khi vào lại sảnh ở phiên mới, phải khôi phục đúng 195 xu');
-  assert.equal(rejoin.disciple?.rankId, 'dai_truong_lao', 'Phải khôi phục đúng cấp Đại Trưởng Lão');
+  assert.equal(rejoin.disciple?.rankId, 'dong_ton', 'Phải khôi phục đúng cấp Đồng Tôn');
 
-  // Now send +5 xu in the new session -> 195 + 5 = 200 xu -> Đồng Tôn Giáo Chủ!
+  // Now send +5 xu in the new session -> 195 + 5 = 200 xu -> Giáo Chủ!
   const rNext = gm.handleGiftEvent({
     id: 'persist_evt_add_5',
     type: 'gift',
@@ -997,7 +1008,7 @@ runTest(46, 'Khởi động lại: Giữ bền vững tổng xu/cấp bậc & ch
     giftCount: 1,
   });
   assert.equal(rNext.disciple.totalCoins, 200, 'Cộng dồn qua phiên mới: 195 + 5 = 200 xu');
-  assert.equal(rNext.disciple.rankId, 'dong_ton_giao_chu');
+  assert.equal(rNext.disciple.rankId, 'giao_chu');
 
   // Switch back to default 'session' mode and simulate restart -> must reset to 0
   gm.setAccumulationConfig({ mode: 'session' });
@@ -1032,12 +1043,12 @@ runTest(47, 'Sao lưu & Khôi phục dữ liệu Cấp Bậc/Sổ Xu (Export/Imp
   assert.equal(afterReset.totalCoins, 0, 'Đặt lại xu Demo phải đưa tổng xu về 0');
   assert.equal(afterReset.rankId, 'dan_den', 'Đặt lại xu Demo phải đưa cấp bậc về Dân Đen');
 
-  // Restore from backupData -> player immediately regains 55 xu & Hộ Pháp Ma Giáo
+  // Restore from backupData -> player immediately regains 55 xu & Trưởng Lão
   const restored = gm.importRankAndLedgerData(backupData as unknown as Record<string, unknown>);
   assert.equal(restored, true);
   const afterRestore = gm.getSnapshot().disciples.find(d => d.userId === 'backup_hero')!;
   assert.equal(afterRestore.totalCoins, 55, 'Khôi phục bản sao lưu phải trả lại đúng 55 xu');
-  assert.equal(afterRestore.rankId, 'ho_phap_ma_giao', 'Khôi phục bản sao lưu phải trả lại cấp Hộ Pháp Ma Giáo');
+  assert.equal(afterRestore.rankId, 'truong_lao', 'Khôi phục bản sao lưu phải trả lại cấp Trưởng Lão');
 
   return 'Sao lưu JSON, Đặt lại xu Demo về 0, và Khôi phục dữ liệu cấp bậc/sổ xu chính xác 100%.';
 });
@@ -1258,8 +1269,8 @@ runTest(51, 'Bảo toàn Cấp Bậc & Tổng Xu khi hết giờ rời sảnh: B
 
   const beforeDepart = gm.getSnapshot().disciples.find(d => d.userId === uid)!;
   assert.equal(beforeDepart.totalCoins, 99);
-  assert.equal(beforeDepart.rankId, 'dai_truong_lao');
-  assert.equal(beforeDepart.rankName, 'Đại Trưởng Lão');
+  assert.equal(beforeDepart.rankId, 'dong_ton');
+  assert.equal(beforeDepart.rankName, 'Đồng Tôn');
 
   // Timeout expires -> leaves hall
   gm.simulateTimeElapsed(15, uid);
@@ -1270,7 +1281,7 @@ runTest(51, 'Bảo toàn Cấp Bậc & Tổng Xu khi hết giờ rời sảnh: B
     'Sổ tích lũy vẫn giữ nguyên 99 xu sau khi nhân vật rời sảnh'
   );
 
-  // Player comments again later -> walks in from gate with saved 99 xu & Đại Trưởng Lão!
+  // Player comments again later -> walks in from gate with saved 99 xu & Đồng Tôn!
   const ret = gm.handleCommentEvent({
     id: 'rv_c2',
     type: 'comment',
@@ -1283,11 +1294,11 @@ runTest(51, 'Bảo toàn Cấp Bậc & Tổng Xu khi hết giờ rời sảnh: B
   assert.equal(ret.isNewSpawn, true, 'Nhân vật tạo lại đi từ cổng chính vào đại điện');
   assert.equal(ret.disciple?.fsmState, 'walk_in_hall');
   assert.equal(ret.disciple?.totalCoins, 99, 'Quay lại sảnh phải giữ nguyên 99 xu');
-  assert.equal(ret.disciple?.rankId, 'dai_truong_lao', 'Quay lại sảnh phải giữ nguyên cấp Đại Trưởng Lão');
-  assert.equal(ret.disciple?.rankName, 'Đại Trưởng Lão');
+  assert.equal(ret.disciple?.rankId, 'dong_ton', 'Quay lại sảnh phải giữ nguyên cấp Đồng Tôn');
+  assert.equal(ret.disciple?.rankName, 'Đồng Tôn');
 
   gm.resetStayDurationConfig();
-  return 'Người chơi hết giờ rời sảnh rồi bình luận quay lại giữ nguyên 99 xu & chức danh Đại Trưởng Lão.';
+  return 'Người chơi hết giờ rời sảnh rồi bình luận quay lại giữ nguyên 99 xu & chức danh Đồng Tôn.';
 });
 
 // 52. Chế độ áp dụng "immediate" vs "new_only" & Nút Gia hạn thời gian của Admin
@@ -1557,6 +1568,228 @@ runTest(58, 'Tùy chỉnh vị trí Ngai Giáo Chủ, Khu Quét Sân, Opacity n�
   gm.updateMasterConfig(cfg);
 
   return 'Đồng bộ trực tiếp vị trí Ngai Giáo Chủ, Khu vực Quét sân, Opacity nền & Popup giữa Admin, Game và OBS.';
+});
+
+// ============================================================================
+// 59–63. KIỂM THỬ BẢNG CẤP BẬC CHÍNH THỨC MỚI, ICON SVG MA GIÁO TRONG BẢNG PHONG CẤP,
+//        VÀ ĐẠI SỰ KIỆN DIỆT MÔN 1.000 XU (5 GIAI ĐOẠN 15 GIÂY)
+// ============================================================================
+
+// 59. Bảng PHONG CẤP dùng Ma Giáo SVG Emblem (không dùng emoji quà TikTok) & hiển thị đủ mốc 1..199 + 1000 DIỆT MÔN
+runTest(59, 'Bảng PHONG CẤP sử dụng Icon SVG Ma Ấn riêng (loại bỏ hoàn toàn emoji quà 🌹🍵🍶⚔️🛡️📜👑🐉)', () => {
+  const hudSource = fs.readFileSync(
+    path.resolve(process.cwd(), 'src/components/ui/MaGiaoOverlayHUD.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    hudSource.includes('MaGiaoRankEmblemSVG'),
+    'MaGiaoOverlayHUD phải có component MaGiaoRankEmblemSVG vẽ ấn ký Ma Giáo bằng SVG'
+  );
+  assert.ok(
+    !hudSource.includes('🌹') && !hudSource.includes('🍵') && !hudSource.includes('🍶'),
+    'Bảng PHONG CẤP tuyệt đối không còn chứa emoji quà TikTok cũ (🌹, 🍵, 🍶)'
+  );
+  assert.ok(
+    hudSource.includes('DIỆT MÔN'),
+    'Bảng PHONG CẤP phải hiển thị dòng 1000 DIỆT MÔN'
+  );
+  return 'Bảng PHONG CẤP hiển thị chuẩn Icon SVG Ma Ấn đồng bộ sắc tím–đỏ–vàng đồng cho các mốc 1, 5, 10, 20, 50, 99, 199, 1000.';
+});
+
+// 60. Cộng dồn 900 + 100 = 1.000 xu: Giữ nguyên cấp Giáo Chủ (không tạo cấp bậc thứ 9) & kích hoạt DIỆT MÔN
+runTest(60, 'Cộng dồn 900 + 100 = 1.000 xu: Người chơi giữ cấp Giáo Chủ (không tạo cấp thứ 9) & kích hoạt đại sự kiện DIỆT MÔN', () => {
+  gm.clearAllPlayers();
+  gm.stopDietMonEmergency();
+
+  const uid = 'diet_mon_accum_hero';
+  const r1 = gm.handleGiftEvent({
+    id: 'dm_900',
+    type: 'gift',
+    timestamp: Date.now(),
+    userId: uid,
+    uniqueId: uid,
+    nickname: 'Độc Cô Cầu Bại',
+    avatarUrl: 'https://example.com/avatar_doc_co.png',
+    coinValue: 900,
+    giftName: 'Thánh Hỏa Lệnh 900 Xu',
+    giftCount: 1,
+  });
+  assert.equal(r1.disciple.totalCoins, 900);
+  assert.equal(r1.disciple.rankId, 'giao_chu', '900 xu đạt cấp cao nhất là Giáo Chủ');
+  assert.equal(r1.dietMonTriggered, false, '900 xu chưa kích hoạt Diệt Môn');
+
+  const r2 = gm.handleGiftEvent({
+    id: 'dm_100',
+    type: 'gift',
+    timestamp: Date.now() + 1,
+    userId: uid,
+    uniqueId: uid,
+    nickname: 'Độc Cô Cầu Bại',
+    avatarUrl: 'https://example.com/avatar_doc_co.png',
+    coinValue: 100,
+    giftName: 'Bách Quỷ Lệnh 100 Xu',
+    giftCount: 1,
+  });
+  assert.equal(r2.disciple.totalCoins, 1000, '900 + 100 phải đúng bằng 1.000 xu');
+  assert.equal(r2.disciple.rankId, 'giao_chu', 'Đạt 1.000 xu vẫn giữ cấp Giáo Chủ, không tạo cấp bậc mới');
+  assert.equal(r2.disciple.rankName, 'Giáo Chủ');
+  assert.equal(r2.dietMonTriggered, true, 'Đạt 1.000 xu phải lập tức kích hoạt đại sự kiện DIỆT MÔN');
+
+  const snap = gm.getSnapshot();
+  assert.equal(snap.dietMon.isActive, true);
+  assert.equal(snap.dietMon.phase, 'tremor', 'Giai đoạn 1 (0–3s) phải là tremor');
+  assert.equal(snap.dietMon.triggerDisplayName, 'Độc Cô Cầu Bại');
+  assert.equal(snap.dietMon.triggerAvatarUrl, 'https://example.com/avatar_doc_co.png');
+
+  gm.stopDietMonEmergency();
+  return '900 + 100 = 1.000 xu ➔ Giữ cấp Giáo Chủ & kích hoạt chính xác sự kiện DIỆT MÔN.';
+});
+
+// 61. Diễn biến đầy đủ 5 giai đoạn sự kiện DIỆT MÔN trong 15 giây với 80 nhân vật trong sảnh
+runTest(61, 'Chu trình 5 giai đoạn DIỆT MÔN 15 giây với 80 nhân vật: Rung chuyển (0-3s) ➔ Sập (3-6s) ➔ Avatar (6-9s) ➔ Hố đen hút sạch (9-12s) ➔ Tái thiết sảnh trống 0 người (12-15s)', () => {
+  gm.clearAllPlayers();
+  gm.spawnDemoPlayers(80);
+  assert.equal(gm.getDiscipleCount(), 80, 'Khởi tạo đủ 80 nhân vật trong Đại Điện');
+
+  // Trigger Diệt Môn
+  const res = gm.triggerTestDietMon('boss_1000', 'Ma Tôn Vô Thượng', 'https://example.com/maton.jpg');
+  assert.equal(res.isActive, true);
+  assert.equal(res.phase, 'tremor', '0s: Giai đoạn 1 - Đại Điện Rung Chuyển (tremor)');
+
+  // Advance to 4.0s -> Phase 2: collapse (3–6s)
+  gm.advanceDietMonByMs(4000);
+  assert.equal(gm.getSnapshot().dietMon.phase, 'collapse', '4s: Giai đoạn 2 - Đại Điện Đổ Sập (collapse)');
+
+  // Advance +3.0s (total 7.0s) -> Phase 3: avatar_descend (6–9s)
+  gm.advanceDietMonByMs(3000);
+  assert.equal(gm.getSnapshot().dietMon.phase, 'avatar_descend', '7s: Giai đoạn 3 - Avatar Giáng Thế (avatar_descend)');
+
+  // Advance +3.5s (total 10.5s) -> Phase 4: vortex_suck (9–12s)
+  gm.advanceDietMonByMs(3500);
+  const snapVortex = gm.getSnapshot();
+  assert.equal(snapVortex.dietMon.phase, 'vortex_suck', '10.5s: Giai đoạn 4 - Hố Đen Cuốn Toàn Bộ Nhân Vật (vortex_suck)');
+  // Verify disciples are being pulled closer to center (50, 50)
+  const sampleD = snapVortex.disciples[0];
+  assert.ok((sampleD.vortexProgress ?? 0) > 0, 'Nhân vật phải có tiến trình xoáy hút vào hố đen trung tâm');
+
+  // Advance +2.5s (total 13.0s) -> Phase 5: rebuild (12–15s) -> Hall must already be cleared to 0 disciples!
+  gm.advanceDietMonByMs(2500);
+  const snapRebuild = gm.getSnapshot();
+  assert.equal(snapRebuild.dietMon.phase, 'rebuild', '13s: Giai đoạn 5 - Tái Thiết Đại Điện (rebuild)');
+  assert.equal(snapRebuild.dietMon.hallCleared, true, 'Cuối giai đoạn 4 hố đen đã cuốn sạch toàn bộ nhân vật');
+  assert.equal(snapRebuild.disciples.length, 0, 'Trong giai đoạn tái thiết, số nhân vật trong sảnh phải bằng 0');
+
+  // Advance +2.5s (total 15.5s >= 15.0s) -> Diệt Môn finishes -> Hall is rebuilt, active=false, disciples=0
+  gm.advanceDietMonByMs(2500);
+  const snapDone = gm.getSnapshot();
+  assert.equal(snapDone.dietMon.isActive, false, 'Đúng 15 giây sự kiện Diệt Môn phải kết thúc hoàn toàn');
+  assert.equal(snapDone.dietMon.phase, 'inactive');
+  assert.equal(snapDone.disciples.length, 0, 'Sau khi tái thiết xong ở giây thứ 15, Đại Điện phải trống hoàn toàn (0 nhân vật)');
+  assert.equal(snapDone.waitingQueue.length, 0, 'Hàng chờ hiển thị cũng phải được dọn sạch');
+
+  return 'Hoàn tất trọn vẹn 5 giai đoạn 15s: Cuốn sạch 80/80 nhân vật vào hố đen & tái thiết Đại Điện trống hoàn toàn (0 người).';
+});
+
+// 62. Sau khi Diệt Môn kết thúc: Không mất tổng xu/cấp bậc trong Sổ Vàng & Người cũ/mới bình luận sẽ đi từ cổng vào lại
+runTest(62, 'Sau Diệt Môn: Bảo toàn 100% tổng xu & cấp bậc trong Sổ Vàng; người chơi cũ hoặc mới bình luận 1 câu sẽ đi từ cổng vào lại sảnh', () => {
+  gm.clearAllPlayers();
+  const oldVipId = 'vip_survivor_99';
+  gm.handleGiftEvent({
+    id: 'pre_dm_gift_99',
+    type: 'gift',
+    timestamp: Date.now(),
+    userId: oldVipId,
+    uniqueId: oldVipId,
+    nickname: 'Chu Chỉ Nhược',
+    coinValue: 99,
+    giftName: 'Ỷ Thiên Kiếm',
+    giftCount: 1,
+  });
+  assert.equal(gm.getDiscipleCount(), 1);
+  assert.equal(gm.getSnapshot().disciples[0].rankId, 'dong_ton');
+
+  // Trigger and complete 15s Diệt Môn
+  gm.triggerTestDietMon('apocalypse_trigger', 'Huyền Minh Nhị Lão');
+  gm.advanceDietMonByMs(15500);
+
+  // Hall is now 0 players, does NOT auto-respawn old players without a new comment
+  assert.equal(gm.getDiscipleCount(), 0, 'Sau Diệt Môn không được tự sinh lại nhân vật cũ nếu họ chưa bình luận');
+
+  // Verify ledger preserved Chu Chỉ Nhược's 99 xu & Đồng Tôn rank
+  const savedLedger = gm.getSnapshot().playerLedger.find(p => p.userId === oldVipId);
+  assert.ok(savedLedger, 'Sổ tích lũy xu của người chơi cũ phải được giữ nguyên sau Diệt Môn');
+  assert.equal(savedLedger!.totalCoins, 99);
+  assert.equal(savedLedger!.rankId, 'dong_ton');
+
+  // Now Chu Chỉ Nhược comments once -> walks in from the gate with full 99 xu & Đồng Tôn rank!
+  const reEnter = gm.handleCommentEvent({
+    id: 'post_dm_reenter_1',
+    type: 'comment',
+    timestamp: Date.now() + 2000,
+    userId: oldVipId,
+    uniqueId: oldVipId,
+    nickname: 'Chu Chỉ Nhược',
+    comment: 'Đại điện tái thiết đẹp quá, ta vào lại đây!',
+  });
+  assert.equal(reEnter.isNewSpawn, true, 'Người chơi cũ bình luận lại sau Diệt Môn sẽ đi từ cổng vào sảnh');
+  assert.equal(gm.getDiscipleCount(), 1);
+  assert.equal(reEnter.disciple?.totalCoins, 99, 'Giữ nguyên 99 xu tích lũy');
+  assert.equal(reEnter.disciple?.rankId, 'dong_ton', 'Giữ nguyên cấp Đồng Tôn');
+  assert.equal(reEnter.disciple?.isCoLeader, true);
+
+  return 'Sau Diệt Môn: Sảnh trống 0 người, bảo toàn Sổ Vàng 99 xu, bình luận 1 câu lập tức đi từ cổng vào lại với nguyên cấp Đồng Tôn.';
+});
+
+// 63. Chống xung đột khi Diệt Môn diễn ra (Tạm dừng Mini Game, chặn lặp cùng User, nút Dừng khẩn cấp & Khôi phục Đại Điện)
+runTest(63, 'Chống xung đột Diệt Môn: Tự dừng Mini Game đang chạy, không kích hoạt lặp cùng 1 người, nút Dừng khẩn cấp & Khôi phục Đại Điện hoạt động chuẩn', () => {
+  gm.clearAllPlayers();
+  gm.spawnDemoPlayers(12);
+  gm.startMiniGame('ma_anh_than_phap');
+  assert.equal(gm.getSnapshot().miniGame.isActive, true);
+  assert.equal(gm.getSnapshot().activeScene, 'training_ground');
+
+  // Player reaches 1000 xu during active mini-game -> Diệt Môn pauses mini-game and switches to main_hall
+  const r1 = gm.handleGiftEvent({
+    id: 'dm_conflict_1000',
+    type: 'gift',
+    timestamp: Date.now(),
+    userId: 'conflict_hero',
+    uniqueId: 'conflict_hero',
+    nickname: 'Phong Thanh Dương',
+    coinValue: 1000,
+    giftName: 'Độc Cô Cửu Kiếm',
+    giftCount: 1,
+  });
+  assert.equal(r1.dietMonTriggered, true);
+  assert.equal(gm.getSnapshot().miniGame.isActive, false, 'Khi Diệt Môn bắt đầu phải tạm dừng ngay Mini Game đang chạy');
+  assert.equal(gm.getSnapshot().activeScene, 'main_hall', 'Khi Diệt Môn bắt đầu phải đưa về Đại Điện');
+
+  // Emergency Stop button test
+  gm.stopDietMonEmergency();
+  assert.equal(gm.getSnapshot().dietMon.isActive, false, 'Nút Dừng sự kiện khẩn cấp phải tắt Diệt Môn ngay');
+
+  // Same user sends another +100 xu in the same session (1100 xu) -> must NOT re-trigger Diệt Môn repeatedly
+  const r2 = gm.handleGiftEvent({
+    id: 'dm_conflict_1100',
+    type: 'gift',
+    timestamp: Date.now() + 10,
+    userId: 'conflict_hero',
+    uniqueId: 'conflict_hero',
+    nickname: 'Phong Thanh Dương',
+    coinValue: 100,
+    giftName: 'Quà Thêm 100 Xu',
+    giftCount: 1,
+  });
+  assert.equal(r2.disciple.totalCoins, 1100);
+  assert.equal(r2.dietMonTriggered, false, 'Cùng 1 người không kích hoạt lặp Diệt Môn liên tục trong 1 phiên');
+
+  // Rebuild Hall Immediately button test
+  gm.triggerTestDietMon('test_rebuild_btn', 'Test Rebuild');
+  assert.equal(gm.getSnapshot().dietMon.isActive, true);
+  gm.rebuildHallImmediately();
+  assert.equal(gm.getSnapshot().dietMon.isActive, false, 'Nút Khôi phục Đại Điện phải đưa Đại Điện về trạng thái bình thường ngay');
+
+  return 'Tự dừng Mini Game khi Diệt Môn nổ ra, chống lặp sự kiện 1000 xu trên cùng User, nút Dừng khẩn cấp & Khôi phục Đại Điện hoạt động hoàn hảo.';
 });
 
 console.log('================================================================================');

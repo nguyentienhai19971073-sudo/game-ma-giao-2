@@ -62,9 +62,13 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
   const [giftNameInput, setGiftNameInput] = useState('');
   const [giftIdsInput, setGiftIdsInput] = useState('');
   const [giftCoinsInput, setGiftCoinsInput] = useState(10);
-  const [giftRankInput, setGiftRankInput] = useState<RankTierId>('su_huynh_su_ty');
+  const [giftRankInput, setGiftRankInput] = useState<RankTierId>('tinh_anh');
   const [giftGrantsThrone, setGiftGrantsThrone] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
+
+  // Diệt Môn 1000 Xu Test state
+  const [dietMonTestName, setDietMonTestName] = useState('Độc Cô Bá Chủ');
+  const [dietMonTestAvatar, setDietMonTestAvatar] = useState('');
 
   // Runtime TTS Credentials state
   const [azureKeyInput, setAzureKeyInput] = useState('');
@@ -112,6 +116,7 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
     giftHistory,
     playerLedger,
     miniGame,
+    dietMon,
     logs,
   } = snapshot;
 
@@ -1495,11 +1500,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
                       onSelectDiscipleId(uid);
-                      notifySync(`Đã thử 1 + 5 + 5 = 11 Xu cho ${name} ➔ Đạt cấp Sư Huynh / Sư Tỷ (Mốc 10 Xu)!`);
+                      notifySync(`Đã thử 1 + 5 + 5 = 11 Xu cho ${name} ➔ Đạt cấp Tinh Anh (Mốc 10 Xu)!`);
                     }}
                     className="px-3 py-1.5 rounded bg-indigo-700 hover:bg-indigo-600 text-white font-bold cursor-pointer"
                   >
-                    ⚡ Thử: 1 + 5 + 5 = 11 Xu ➔ Sư Huynh/Tỷ (Mốc 10)
+                    ⚡ Thử: 1 + 5 + 5 = 11 Xu ➔ Tinh Anh (Mốc 10)
                   </button>
 
                   <button
@@ -1524,11 +1529,11 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
                       onSelectDiscipleId(uid);
-                      notifySync(`Đã thử 90 + 10 = 100 Xu cho ${name} ➔ Đạt cấp Đại Trưởng Lão (Mốc 99 Xu)!`);
+                      notifySync(`Đã thử 90 + 10 = 100 Xu cho ${name} ➔ Đạt cấp Đồng Tôn (Mốc 99 Xu)!`);
                     }}
                     className="px-3 py-1.5 rounded bg-amber-700 hover:bg-amber-600 text-white font-bold cursor-pointer"
                   >
-                    ⚡ Thử: 90 + 10 = 100 Xu ➔ Đại Trưởng Lão (Mốc 99)
+                    ⚡ Thử: 90 + 10 = 100 Xu ➔ Đồng Tôn (Mốc 99)
                   </button>
 
                   <button
@@ -1553,11 +1558,39 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
                       });
                       onSelectDiscipleId(uid);
-                      notifySync(`Đã thử 190 + 10 = 200 Xu cho ${name} ➔ Đạt cấp Đồng Tôn Giáo Chủ (Mốc 199 Xu)!`);
+                      notifySync(`Đã thử 190 + 10 = 200 Xu cho ${name} ➔ Đạt cấp Giáo Chủ (Mốc 199 Xu)!`);
                     }}
                     className="px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold cursor-pointer"
                   >
-                    ⚡ Thử: 190 + 10 = 200 Xu ➔ Đồng Tôn Giáo Chủ (Mốc 199)
+                    ⚡ Thử: 190 + 10 = 200 Xu ➔ Giáo Chủ (Mốc 199)
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const uid = selectedDisciple?.userId || `diet_mon_user_${Date.now()}`;
+                      const name = selectedDisciple?.displayName || 'Đông Phương Bất Bại';
+                      sectGameManager.resetDemoCoins(uid);
+                      [900, 100].forEach((c, idx) => {
+                        const evt: TikTokLiveEvent = {
+                          id: `scen_1000_${Date.now()}_${idx}`,
+                          type: 'gift',
+                          timestamp: Date.now() + idx,
+                          userId: uid,
+                          uniqueId: uid,
+                          nickname: name,
+                          coinValue: c,
+                          giftName: `Thánh Vật ${c} Xu`,
+                          giftCount: 1,
+                          isDemo: true,
+                        };
+                        sectGameManager.handleGiftEvent(evt);
+                        liveConnectionManager.emitAdminCommand({ action: 'test_live_event', event: evt });
+                      });
+                      notifySync(`Đã thử 900 + 100 = 1.000 Xu cho ${name} ➔ Giữ cấp Giáo Chủ & Kích hoạt DIỆT MÔN!`);
+                    }}
+                    className="px-3 py-1.5 rounded bg-red-700 hover:bg-red-600 text-white font-bold cursor-pointer"
+                  >
+                    💥 Thử: 900 + 100 = 1.000 Xu ➔ Kích Hoạt DIỆT MÔN
                   </button>
 
                   <button
@@ -1590,6 +1623,317 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     🛡️ Thử Chống Cộng Trùng (Gửi Lặp 2 Lần Cùng Event ID)
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* B2. QUẢN TRỊ ĐẠI SỰ KIỆN ĐẶC BIỆT: DIỆT MÔN (1.000 XU) */}
+            <div
+              data-testid="admin-diet-mon-panel"
+              className="p-3.5 rounded-lg bg-gradient-to-br from-red-950/50 via-stone-900 to-purple-950/40 border border-red-500/50 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-red-400 uppercase text-xs flex items-center gap-1.5">
+                    <span>⚡ Đại Sự Kiện Đặc Biệt: MA GIÁO ĐẠI KIẾP – DIỆT MÔN ({config.dietMonConfig?.coinThreshold || 1000} XU)</span>
+                    {dietMon.isActive && (
+                      <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] animate-pulse">
+                        ĐANG DIỄN RA: {dietMon.phase.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-stone-300 mt-0.5">
+                    Người đạt mốc {config.dietMonConfig?.coinThreshold || 1000} xu vẫn giữ cấp <strong>Giáo Chủ</strong> (không tạo cấp bậc thứ 9) và kích hoạt 5 giai đoạn sập đại điện – hố đen cuốn toàn bộ đệ tử – tái thiết đại điện trong {config.dietMonConfig?.durationSec || 15} giây.
+                  </div>
+                </div>
+
+                {/* Action Buttons: TEST DIỆT MÔN / DỪNG SỰ KIỆN KHẨN CẤP / KHÔI PHỤC ĐẠI ĐIỆN */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    data-testid="btn-test-diet-mon"
+                    onClick={() => {
+                      const targetId = selectedDisciple?.userId || `test_diet_mon_${Date.now()}`;
+                      const targetName =
+                        dietMonTestName.trim() || selectedDisciple?.displayName || 'Độc Cô Bá Chủ';
+                      const targetAvatar =
+                        dietMonTestAvatar.trim() || selectedDisciple?.avatarUrl || undefined;
+                      sectGameManager.triggerTestDietMon(targetId, targetName, targetAvatar);
+                      liveConnectionManager.emitAdminCommand({
+                        action: 'test_diet_mon',
+                        userId: targetId,
+                        displayName: targetName,
+                        avatarUrl: targetAvatar,
+                      });
+                      notifySync(`⚡ Đã kích hoạt TEST DIỆT MÔN cho "${targetName}"!`);
+                    }}
+                    className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-500 text-white font-extrabold cursor-pointer shadow-lg"
+                  >
+                    💥 TEST DIỆT MÔN
+                  </button>
+
+                  <button
+                    data-testid="btn-stop-diet-mon"
+                    onClick={() => {
+                      sectGameManager.stopDietMonEmergency();
+                      liveConnectionManager.emitAdminCommand({ action: 'stop_diet_mon' });
+                      notifySync('🛑 Đã dừng khẩn cấp sự kiện Diệt Môn!');
+                    }}
+                    className="px-3 py-1.5 rounded bg-amber-700 hover:bg-amber-600 text-white font-bold cursor-pointer"
+                  >
+                    🛑 DỪNG SỰ KIỆN KHẨN CẤP
+                  </button>
+
+                  <button
+                    data-testid="btn-rebuild-hall"
+                    onClick={() => {
+                      sectGameManager.rebuildHallImmediately();
+                      liveConnectionManager.emitAdminCommand({ action: 'rebuild_hall' });
+                      notifySync('🏛️ Đã khôi phục nguyên trạng Đại Điện Ma Giáo ngay lập tức!');
+                    }}
+                    className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
+                  >
+                    🏛️ KHÔI PHỤC ĐẠI ĐIỆN
+                  </button>
+                </div>
+              </div>
+
+              {/* Test Player Name & Avatar URL Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5 rounded bg-stone-950/90 border border-stone-800">
+                <label className="block text-[11px]">
+                  <span className="text-stone-400 block mb-1">Tên người chơi hiển thị khi Test Diệt Môn:</span>
+                  <input
+                    type="text"
+                    value={dietMonTestName}
+                    onChange={e => setDietMonTestName(e.target.value)}
+                    placeholder="VD: Độc Cô Bá Chủ"
+                    className="w-full px-2.5 py-1 rounded bg-stone-900 border border-stone-700 text-amber-200 font-semibold"
+                  />
+                </label>
+                <label className="block text-[11px]">
+                  <span className="text-stone-400 block mb-1">URL Avatar TikTok thử nghiệm (để trống dùng Ma Ấn mặc định):</span>
+                  <input
+                    type="text"
+                    value={dietMonTestAvatar}
+                    onChange={e => setDietMonTestAvatar(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-2.5 py-1 rounded bg-stone-900 border border-stone-700 text-stone-200 font-mono text-[10px]"
+                  />
+                </label>
+              </div>
+
+              {/* Diệt Môn Configuration Parameters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-2.5 rounded bg-stone-950 border border-stone-800 text-[11px]">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.dietMonConfig?.enabled !== false}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({ enabled: e.target.checked });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                  />
+                  <span className="font-bold text-red-300">Bật Đại Sự Kiện Diệt Môn</span>
+                </label>
+
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-stone-300">Mốc Xu Kích Hoạt:</span>
+                  <input
+                    type="number"
+                    min={100}
+                    max={100000}
+                    value={config.dietMonConfig?.coinThreshold ?? 1000}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        coinThreshold: Number(e.target.value) || 1000,
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                    className="w-24 px-2 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-300 font-mono font-bold"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-stone-300">Tổng Thời Lượng (10–25s):</span>
+                  <input
+                    type="number"
+                    min={10}
+                    max={25}
+                    value={config.dietMonConfig?.durationSec ?? 15}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        durationSec: Number(e.target.value) || 15,
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                    className="w-20 px-2 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-300 font-mono font-bold"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-stone-300">Cường Độ Rung Lắc:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={25}
+                    value={config.dietMonConfig?.shakeIntensity ?? 8}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        shakeIntensity: Number(e.target.value),
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                    className="w-20 px-2 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-300 font-mono"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.dietMonConfig?.enableHallCollapse !== false}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        enableHallCollapse: e.target.checked,
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                  />
+                  <span className="text-stone-200">Hiệu Ứng Sập Đại Điện</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.dietMonConfig?.showBigAvatar !== false}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        showBigAvatar: e.target.checked,
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                  />
+                  <span className="text-stone-200">Hiện Avatar Lớn Giữa Màn Hình</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.dietMonConfig?.enableVortexSuck !== false}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        enableVortexSuck: e.target.checked,
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                  />
+                  <span className="text-stone-200">Hố Đen Hút Toàn Bộ Nhân Vật</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.dietMonConfig?.enableAutoRebuild !== false}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        enableAutoRebuild: e.target.checked,
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                  />
+                  <span className="text-stone-200">Tự Động Tái Thiết Đại Điện</span>
+                </label>
+
+                <label className="flex items-center justify-between gap-2 sm:col-span-2">
+                  <span className="text-stone-300">Kích Thước Avatar Trung Tâm:</span>
+                  <input
+                    type="range"
+                    min={0.6}
+                    max={1.6}
+                    step={0.05}
+                    value={config.dietMonConfig?.avatarScale ?? 1.0}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        avatarScale: Number(e.target.value),
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                    className="w-36"
+                  />
+                  <span className="font-mono text-amber-300">
+                    {Math.round((config.dietMonConfig?.avatarScale ?? 1) * 100)}%
+                  </span>
+                </label>
+
+                <label className="flex items-center justify-between gap-2 sm:col-span-2">
+                  <span className="text-stone-300">Xử lý bình luận trong lúc Diệt Môn:</span>
+                  <select
+                    value={config.dietMonConfig?.commentHandlingMode || 'queue'}
+                    onChange={e => {
+                      const next = sectGameManager.setDietMonConfig({
+                        commentHandlingMode: e.target.value as 'queue' | 'ignore',
+                      });
+                      updateAndSyncConfig(d => {
+                        d.dietMonConfig = next;
+                      });
+                    }}
+                    className="px-2 py-1 rounded bg-stone-900 border border-stone-700 text-amber-200 font-semibold"
+                  >
+                    <option value="queue">Tạm xếp hàng chờ (Tự vào sảnh sau khi tái thiết)</option>
+                    <option value="ignore">Bỏ qua trong 15s Diệt Môn (Bình luận lại sau khi tái thiết)</option>
+                  </select>
+                </label>
+              </div>
+
+              {/* Nhật Ký Người Kích Hoạt Diệt Môn */}
+              <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-1.5">
+                <div className="font-bold text-amber-300 text-[11px]">
+                  📜 Nhật Ký Người Kích Hoạt Đại Sự Kiện Diệt Môn ({dietMon.history.length}):
+                </div>
+                {dietMon.history.length === 0 ? (
+                  <div className="text-[11px] text-stone-500 italic">
+                    Chưa có cao thủ nào kích hoạt Diệt Môn trong phiên này.
+                  </div>
+                ) : (
+                  <div className="max-h-28 overflow-y-auto space-y-1 text-[11px] tabular-nums">
+                    {dietMon.history.map(item => (
+                      <div
+                        key={item.id}
+                        className="px-2 py-1 rounded bg-stone-900 border border-red-500/30 flex items-center justify-between gap-2"
+                      >
+                        <div>
+                          <strong className="text-yellow-300">{item.displayName}</strong>{' '}
+                          <code className="text-[10px] text-stone-400">({item.userId})</code> • Tổng xu:{' '}
+                          <strong className="text-red-400">{item.totalCoins} Xu</strong> • Đã cuốn:{' '}
+                          <strong className="text-purple-300">{item.suckedDisciplesCount} đệ tử</strong>
+                          {item.isTest && (
+                            <span className="ml-1.5 px-1.5 py-0.2 rounded bg-purple-900 text-purple-200 text-[9px]">
+                              TEST
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-stone-500 shrink-0">
+                          {new Date(item.timestamp).toLocaleTimeString('vi-VN')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1909,9 +2253,9 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                         giftName: giftNameInput,
                         giftIds: parsedIds,
                         coinValue: giftCoinsInput,
-                        rankGranted: giftGrantsThrone ? 'tan_giao_chu' : giftRankInput,
-                        grantsThrone: giftGrantsThrone,
-                        grantsCoLeader: giftCoinsInput >= 199 && !giftGrantsThrone,
+                        rankGranted: giftGrantsThrone ? 'giao_chu' : giftRankInput,
+                        grantsThrone: giftGrantsThrone || giftCoinsInput >= 199,
+                        grantsCoLeader: giftCoinsInput >= 99 && giftCoinsInput < 199 && !giftGrantsThrone,
                       });
                       if (!res.ok) {
                         setGiftError(res.error || 'Lỗi thêm quà');

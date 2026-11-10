@@ -90,6 +90,18 @@ export function App() {
         sectGameManager.setStayDurationConfig(cmd.stayDurationConfig as Record<string, unknown>);
       } else if (isRemote && cmd.action === 'reset_stay_config') {
         sectGameManager.resetStayDurationConfig();
+      } else if (isRemote && cmd.action === 'test_diet_mon') {
+        sectGameManager.triggerTestDietMon(
+          typeof cmd.userId === 'string' ? cmd.userId : undefined,
+          typeof cmd.displayName === 'string' ? cmd.displayName : undefined,
+          typeof cmd.avatarUrl === 'string' ? cmd.avatarUrl : undefined
+        );
+      } else if (isRemote && cmd.action === 'stop_diet_mon') {
+        sectGameManager.stopDietMonEmergency();
+      } else if (isRemote && cmd.action === 'rebuild_hall') {
+        sectGameManager.rebuildHallImmediately();
+      } else if (isRemote && cmd.action === 'update_diet_mon_config' && cmd.dietMonConfig) {
+        sectGameManager.setDietMonConfig(cmd.dietMonConfig as Record<string, unknown>);
       } else if (isRemote && cmd.action === 'clear_demo') {
         sectGameManager.clearDemoData();
       } else if (isRemote && cmd.action === 'clear_all') {
@@ -138,6 +150,7 @@ export function App() {
             miniGame={snapshot.miniGame}
             sceneConfig={snapshot.config.sceneConfig}
             overlayConfig={snapshot.config.overlayConfig}
+            dietMon={snapshot.dietMon}
             thronePosition={snapshot.config.sectLeader.thronePosition}
             minSeparationDist={snapshot.config.playerAnimationConfig.minSeparationDist}
           />
@@ -275,6 +288,7 @@ export function App() {
               miniGame={snapshot.miniGame}
               sceneConfig={snapshot.config.sceneConfig}
               overlayConfig={snapshot.config.overlayConfig}
+              dietMon={snapshot.dietMon}
               thronePosition={snapshot.config.sectLeader.thronePosition}
               minSeparationDist={snapshot.config.playerAnimationConfig.minSeparationDist}
               selectedDiscipleId={selectedDiscipleId}

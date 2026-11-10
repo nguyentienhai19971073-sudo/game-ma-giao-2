@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   ActiveSceneType,
+  DietMonRuntimeState,
   SectDisciple,
   SectLeaderRuntimeState,
   MiniGameActiveState,
@@ -15,6 +16,7 @@ interface MaGiao2DCanvasProps {
   miniGame: MiniGameActiveState;
   sceneConfig: SceneConfig;
   overlayConfig: OverlayConfig;
+  dietMon?: DietMonRuntimeState;
   thronePosition?: { x: number; y: number };
   minSeparationDist?: number;
   onSelectDisciple?: (disciple: SectDisciple) => void;
@@ -39,6 +41,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
   miniGame,
   sceneConfig,
   overlayConfig,
+  dietMon,
   thronePosition,
   minSeparationDist = 5.2,
   onSelectDisciple,
@@ -52,6 +55,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
     miniGame,
     sceneConfig,
     overlayConfig,
+    dietMon,
     thronePosition,
     minSeparationDist,
     selectedDiscipleId,
@@ -65,6 +69,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
       miniGame,
       sceneConfig,
       overlayConfig,
+      dietMon,
       thronePosition,
       minSeparationDist,
       selectedDiscipleId,
@@ -76,6 +81,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
     miniGame,
     sceneConfig,
     overlayConfig,
+    dietMon,
     thronePosition,
     minSeparationDist,
     selectedDiscipleId,
@@ -107,6 +113,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
         miniGame: mg,
         sceneConfig: sCfg,
         overlayConfig: oCfg,
+        dietMon: dm,
         thronePosition: thronePosProp,
         minSeparationDist: minSep,
         selectedDiscipleId: selId,
@@ -126,12 +133,29 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
       const throneDyPx = ((resolvedThronePos.y - 19) / 100) * H; // +30px at y=22.13%
 
       ctx.clearRect(0, 0, W, H);
+      ctx.save();
+
+      // Controlled camera tremor during Diệt Môn Phase 1 (tremor) & Phase 2 (collapse)
+      if (dm?.isActive && (dm.phase === 'tremor' || dm.phase === 'collapse')) {
+        const mult = dm.phase === 'tremor' ? 0.55 + dm.phaseProgress * 0.65 : 1.0 - dm.phaseProgress * 0.35;
+        const shakeX = Math.sin(t * 54) * 7.5 * mult;
+        const shakeY = Math.cos(t * 48) * 5.5 * mult;
+        ctx.translate(shakeX, shakeY);
+      }
 
       // 1. Draw Background Architecture (Đại Điện Ma Giáo or Sân Luyện Võ)
       if (curScene === 'main_hall') {
-        drawMainHallEnvironment(ctx, W, H, t, sCfg, throneDxPx, throneDyPx);
+        drawMainHallEnvironment(ctx, W, H, t, sCfg, throneDxPx, throneDyPx, dm);
       } else {
         drawTrainingGroundEnvironment(ctx, W, H, t, sCfg, mg, throneDxPx, throneDyPx);
+      }
+
+      // 1B. Draw Diệt Môn Central Energy Vortex behind characters during Phases 3, 4 & 5
+      if (
+        dm?.isActive &&
+        (dm.phase === 'avatar_descend' || dm.phase === 'vortex_suck' || dm.phase === 'rebuild')
+      ) {
+        drawDietMonEnergyVortex(ctx, W, H, t, dm);
       }
 
       // 2. Optional Debug Zone Overlay (Admin Inspection Mode)
@@ -172,9 +196,14 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
       for (const d of sortedDisciples) {
         const px = (d.x / 100) * W;
         const py = (d.y / 100) * H;
-        const scale = d.scale * globalAvatarScale;
+        let vortexScale = 1.0;
+        if (dm?.isActive && dm.phase === 'vortex_suck') {
+          const vp = d.vortexProgress ?? dm.phaseProgress;
+          vortexScale = Math.max(0.12, 1 - vp * 0.88);
+        }
+        const scale = d.scale * globalAvatarScale * vortexScale;
         const isSelected = selId === d.userId;
-        drawArticulatedDisciple(ctx, px, py, scale, d, t, timeMs, isSelected);
+        drawArticulatedDisciple(ctx, px, py, scale, d, t, timeMs, isSelected, dm);
       }
 
       // 7. Draw Active Mini-Game Field Effects (Obstacle Beams or 3-Element Trigram Energy)
@@ -185,6 +214,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
       // 8. Draw Atmospheric Particles (Embers, Purple Mist, Red Lantern Glow, Sweeping Leaves)
       drawAtmosphericParticles(ctx, W, H, particles, sCfg.mistIntensity, curScene);
 
+      ctx.restore();
       animFrameId = window.requestAnimationFrame(renderLoop);
     };
 
@@ -235,12 +265,28 @@ function drawMainHallEnvironment(
   t: number,
   sCfg: SceneConfig,
   throneDxPx: number,
-  throneDyPx: number
+  throneDyPx: number,
+  dietMon?: DietMonRuntimeState
 ) {
-  // Deep obsidian-crimson sanctuary gradient
+  const isCollapsed =
+    dietMon?.isActive &&
+    (dietMon.phase === 'collapse' ||
+      dietMon.phase === 'avatar_descend' ||
+      dietMon.phase === 'vortex_suck');
+  const isRebuild = dietMon?.isActive && dietMon.phase === 'rebuild';
+  const collapseFactor =
+    dietMon?.phase === 'collapse'
+      ? dietMon.phaseProgress
+      : isCollapsed
+      ? 1
+      : isRebuild
+      ? Math.max(0, 1 - dietMon.phaseProgress)
+      : 0;
+
+  // Deep obsidian-crimson sanctuary gradient (intensifies during Diệt Môn)
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
-  bgGrad.addColorStop(0, '#07050A');
-  bgGrad.addColorStop(0.26, '#150916');
+  bgGrad.addColorStop(0, collapseFactor > 0.2 ? '#24040E' : '#07050A');
+  bgGrad.addColorStop(0.26, collapseFactor > 0.2 ? '#35081B' : '#150916');
   bgGrad.addColorStop(0.62, '#130D1B');
   bgGrad.addColorStop(1, '#0A070F');
   ctx.fillStyle = bgGrad;
@@ -307,7 +353,6 @@ function drawMainHallEnvironment(
   ctx.strokeRect(W * 0.26 + throneDxPx, H * 0.14 + throneDyPx, W * 0.48, H * 0.14);
 
   // WIDE CENTRAL AISLE (LỐI ĐI CHÍNH GIỮA: x = 32%..68%)
-  // Designed as the centerpiece open activity floor of the Đại Điện!
   const aisleX = W * 0.32;
   const aisleW = W * 0.36;
   const carpetGrad = ctx.createLinearGradient(aisleX, floorTopY, aisleX + aisleW, floorTopY);
@@ -345,7 +390,7 @@ function drawMainHallEnvironment(
   ctx.fillText('TRUNG TÂM ĐẠI ĐIỆN MA GIÁO', 0, W * 0.14 + 14);
   ctx.restore();
 
-  // Subtle Left & Right Open Floor Wing Inlays (No solid wall boxes blocking movement!)
+  // Subtle Left & Right Open Floor Wing Inlays
   ctx.save();
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.16)';
   ctx.setLineDash([6, 6]);
@@ -371,7 +416,7 @@ function drawMainHallEnvironment(
   // Grand Obsidian-Gold Dragon Throne (shifted down +30px from H * 0.19 to H * 0.19 + throneDyPx)
   drawGrandThrone(ctx, W * 0.5 + throneDxPx, H * 0.19 + throneDyPx);
 
-  // Co-Leader Dais (Đài Đồng Tôn Giáo Chủ - 199 Xu) synchronized with co_leader_dais zone
+  // Co-Leader Dais (Đài Đồng Tôn - 99 Xu) synchronized with co_leader_dais zone
   const coDaisZone = sCfg.zones?.co_leader_dais;
   const coDaisX = coDaisZone ? ((coDaisZone.xMin + coDaisZone.xMax) * 0.5 / 100) * W : W * 0.80 + throneDxPx;
   const coDaisY = coDaisZone ? ((coDaisZone.yMin + coDaisZone.yMax) * 0.5 / 100) * H : H * 0.23 + throneDyPx;
@@ -391,21 +436,27 @@ function drawMainHallEnvironment(
   const sweepH = Math.max(H * 0.065, ((sweepZone.yMax - sweepZone.yMin) / 100) * H);
   drawZoneFloorPad(ctx, sweepX, sweepY, sweepW, sweepH, 'GÓC QUÉT SÂN', '#D97706');
 
-  // Dragon Pillars on Outer Left & Right Walls
+  // Dragon Pillars on Outer Left & Right Walls (with collapse/rebuild physics during Diệt Môn)
   if (sCfg.dragonPillars) {
-    drawDragonPillar(ctx, W * 0.04, H * 0.12, H * 0.76, t);
-    drawDragonPillar(ctx, W * 0.96, H * 0.12, H * 0.76, t);
+    drawDragonPillar(ctx, W * 0.04, H * 0.12, H * 0.76, t, 'left', collapseFactor);
+    drawDragonPillar(ctx, W * 0.96, H * 0.12, H * 0.76, t, 'right', collapseFactor);
   }
 
-  // Swaying Sect Banners & Red Lanterns
-  if (sCfg.sectBanners) {
-    drawSectBanner(ctx, W * 0.14, H * 0.07, 'THIÊN HẠ', t);
-    drawSectBanner(ctx, W * 0.86, H * 0.07, 'ĐỆ NHẤT', t + 1.2);
+  // Draw Diệt Môn Floor/Wall Cracks, Lightning & Falling Debris
+  if (dietMon?.isActive && dietMon.phase !== 'inactive') {
+    drawDietMonHallDestructionEffects(ctx, W, H, t, dietMon, collapseFactor);
   }
 
-  if (sCfg.redLanterns) {
-    drawRedLantern(ctx, W * 0.25, H * 0.08, t);
-    drawRedLantern(ctx, W * 0.75, H * 0.08, t + 1.5);
+  // Swaying Sect Banners & Red Lanterns (fall during collapse, restored in rebuild)
+  if (sCfg.sectBanners && collapseFactor < 0.78) {
+    const bannerSpeed = dietMon?.isActive ? t * 4 : t;
+    drawSectBanner(ctx, W * 0.14, H * 0.07 + collapseFactor * 45, 'THIÊN HẠ', bannerSpeed);
+    drawSectBanner(ctx, W * 0.86, H * 0.07 + collapseFactor * 45, 'ĐỆ NHẤT', bannerSpeed + 1.2);
+  }
+
+  if (sCfg.redLanterns && collapseFactor < 0.82) {
+    drawRedLantern(ctx, W * 0.25, H * 0.08 + collapseFactor * 60, t);
+    drawRedLantern(ctx, W * 0.75, H * 0.08 + collapseFactor * 60, t + 1.5);
   }
 
   // Bottom Stone Entry Gate Archway
@@ -658,7 +709,7 @@ function drawCoLeaderDais(ctx: CanvasRenderingContext2D, cx: number, cy: number,
   ctx.fillStyle = '#E9D5FF';
   ctx.font = 'bold 7.5px "Plus Jakarta Sans", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('ĐÀI ĐỒNG TÔN (199 XU)', 0, 20);
+  ctx.fillText('ĐÀI ĐỒNG TÔN (99 XU)', 0, 20);
   ctx.restore();
 }
 
@@ -744,30 +795,205 @@ function drawDragonPillar(
   cx: number,
   topY: number,
   height: number,
-  t: number
+  t: number,
+  side: 'left' | 'right' = 'left',
+  collapseFactor: number = 0
 ) {
   ctx.save();
-  const grad = ctx.createLinearGradient(cx - 12, topY, cx + 12, topY);
+  const baseBottomY = topY + height;
+  ctx.translate(cx, baseBottomY);
+  const tiltSign = side === 'left' ? 1 : -1;
+  ctx.rotate(tiltSign * collapseFactor * 0.28);
+
+  const grad = ctx.createLinearGradient(-12, -height, 12, -height);
   grad.addColorStop(0, '#3B0810');
   grad.addColorStop(0.5, '#7F1D1D');
   grad.addColorStop(1, '#28050A');
   ctx.fillStyle = grad;
-  ctx.fillRect(cx - 10, topY, 20, height);
+  ctx.fillRect(-10, -height, 20, height);
 
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.55)';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(cx - 10, topY, 20, height);
+  ctx.strokeRect(-10, -height, 20, height);
 
   // Coiling golden dragon motif along the pillar
   ctx.strokeStyle = 'rgba(251, 191, 36, 0.45)';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let py = topY + 10; py < topY + height - 10; py += 8) {
-    const px = cx + Math.sin(py * 0.06 + t) * 7;
-    if (py === topY + 10) ctx.moveTo(px, py);
+  for (let py = -height + 10; py < -10; py += 8) {
+    const px = Math.sin(py * 0.06 + t) * 7;
+    if (py === -height + 10) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   }
   ctx.stroke();
+
+  // Fracture lines across pillar during Diệt Môn collapse
+  if (collapseFactor > 0.05) {
+    ctx.strokeStyle = `rgba(244, 63, 94, ${Math.min(1, collapseFactor * 1.2)})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-10, -height * 0.65);
+    ctx.lineTo(4, -height * 0.61);
+    ctx.lineTo(10, -height * 0.67);
+    ctx.moveTo(-10, -height * 0.35);
+    ctx.lineTo(-2, -height * 0.31);
+    ctx.lineTo(10, -height * 0.37);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDietMonHallDestructionEffects(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  t: number,
+  dietMon: DietMonRuntimeState,
+  collapseFactor: number
+) {
+  ctx.save();
+  const phase = dietMon.phase;
+  const crackAlpha =
+    phase === 'tremor'
+      ? Math.min(1, 0.35 + dietMon.phaseProgress * 0.65)
+      : phase === 'rebuild'
+      ? Math.max(0, 1 - dietMon.phaseProgress)
+      : 0.92;
+
+  // 1. Glowing Crimson-Purple Fissure Cracks across Hall Floor & Upper Walls
+  if (crackAlpha > 0.05) {
+    ctx.strokeStyle = `rgba(236, 72, 153, ${crackAlpha})`;
+    ctx.shadowColor = '#EC4899';
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 2.2;
+
+    const fissures = [
+      [
+        [W * 0.5, H * 0.52],
+        [W * 0.38, H * 0.44],
+        [W * 0.24, H * 0.38],
+        [W * 0.14, H * 0.29],
+      ],
+      [
+        [W * 0.5, H * 0.52],
+        [W * 0.63, H * 0.43],
+        [W * 0.77, H * 0.39],
+        [W * 0.88, H * 0.31],
+      ],
+      [
+        [W * 0.5, H * 0.52],
+        [W * 0.42, H * 0.67],
+        [W * 0.29, H * 0.79],
+        [W * 0.18, H * 0.91],
+      ],
+      [
+        [W * 0.5, H * 0.52],
+        [W * 0.59, H * 0.66],
+        [W * 0.72, H * 0.78],
+        [W * 0.84, H * 0.9],
+      ],
+    ];
+
+    for (const chain of fissures) {
+      ctx.beginPath();
+      chain.forEach(([x, y], idx) => {
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  }
+
+  // 2. Red-Purple Apocalyptic Lightning Arcs during Phase 1 (tremor) & Phase 2 (collapse)
+  if ((phase === 'tremor' || phase === 'collapse') && Math.sin(t * 28) > -0.2) {
+    ctx.strokeStyle = 'rgba(216, 180, 254, 0.9)';
+    ctx.lineWidth = 2;
+    for (let b = 0; b < 2; b++) {
+      const startX = W * (0.25 + b * 0.5 + Math.sin(t * 9 + b) * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(startX, H * 0.05);
+      ctx.lineTo(startX - 18, H * 0.18);
+      ctx.lineTo(startX + 14, H * 0.31);
+      ctx.lineTo(startX - 10, H * 0.48);
+      ctx.stroke();
+    }
+  }
+
+  // 3. Falling / Rising Mystical Roof & Wall Energy Shards (Phase 2 collapse vs Phase 5 rebuild)
+  if (collapseFactor > 0.05 || phase === 'rebuild') {
+    for (let i = 0; i < 14; i++) {
+      const seed = i * 37.3;
+      const sx = ((seed * 13) % (W * 0.84)) + W * 0.08;
+      const baseFall =
+        phase === 'rebuild'
+          ? (1 - dietMon.phaseProgress) * H * 0.75
+          : ((t * 140 + seed * 9) % (H * 0.75)) + H * 0.12;
+      ctx.save();
+      ctx.translate(sx, baseFall);
+      ctx.rotate(t * 3 + i);
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(147, 51, 234, 0.75)' : 'rgba(220, 38, 38, 0.75)';
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 1;
+      ctx.fillRect(-6, -4, 12, 8);
+      ctx.strokeRect(-6, -4, 12, 8);
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawDietMonEnergyVortex(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  t: number,
+  dietMon: DietMonRuntimeState
+) {
+  ctx.save();
+  const cx = W * 0.5;
+  const cy = H * 0.5;
+  const scale =
+    dietMon.phase === 'avatar_descend'
+      ? 0.45 + dietMon.phaseProgress * 0.55
+      : dietMon.phase === 'vortex_suck'
+      ? 1.0 + Math.sin(t * 12) * 0.08
+      : Math.max(0, 1 - dietMon.phaseProgress);
+
+  if (scale <= 0.02) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+
+  const maxR = W * 0.42;
+  const coreGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, maxR);
+  coreGrad.addColorStop(0, 'rgba(15, 3, 28, 0.96)');
+  coreGrad.addColorStop(0.35, 'rgba(147, 51, 234, 0.72)');
+  coreGrad.addColorStop(0.7, 'rgba(220, 38, 38, 0.45)');
+  coreGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, maxR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spiraling Ma Ấn Suction Rings
+  for (let ring = 1; ring <= 4; ring++) {
+    ctx.save();
+    ctx.rotate(t * (ring % 2 === 0 ? 3.4 : -2.8) + ring);
+    ctx.strokeStyle =
+      ring % 2 === 0 ? 'rgba(244, 63, 94, 0.78)' : 'rgba(212, 175, 55, 0.75)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([14, 10]);
+    ctx.beginPath();
+    ctx.arc(0, 0, ring * 44, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.restore();
 }
 
@@ -1172,7 +1398,8 @@ function drawArticulatedDisciple(
   d: SectDisciple,
   t: number,
   nowMs: number,
-  isSelected: boolean
+  isSelected: boolean,
+  dietMon?: DietMonRuntimeState
 ) {
   ctx.save();
 
@@ -1327,9 +1554,35 @@ function drawArticulatedDisciple(
   ctx.translate(px, py);
   ctx.scale(scale, scale);
 
+  // Spiral rotation during Diệt Môn Phase 4 (vortex_suck)
+  if (dietMon?.isActive && dietMon.phase === 'vortex_suck') {
+    const vp = d.vortexProgress ?? dietMon.phaseProgress;
+    ctx.rotate((d.vortexAngle ?? t * 8) * vp);
+    ctx.globalAlpha = Math.max(0.15, 1 - vp * 0.85);
+  }
+
   if (d.fsmState === 'departing_gate' || d.stayStatus === 'departing') {
     const fadeProgress = d.y > 86 ? Math.max(0.25, 1 - (d.y - 86) / 10) : 0.9;
     ctx.globalAlpha = fadeProgress;
+  }
+
+  // Descending Gold-Purple Light Pillar during Trưởng Lão (50 xu) / Đồng Tôn (99 xu) / Giáo Chủ (199 xu) Promotion
+  if (
+    d.promotionCeremonyUntil &&
+    d.promotionCeremonyUntil > nowMs &&
+    (d.rankId === 'truong_lao' ||
+      d.rankId === 'ho_phap_ma_giao' ||
+      d.rankId === 'dong_ton' ||
+      d.rankId === 'dai_truong_lao' ||
+      d.rankId === 'giao_chu' ||
+      d.rankId === 'tan_giao_chu')
+  ) {
+    const beamGrad = ctx.createLinearGradient(0, -140, 0, 16);
+    beamGrad.addColorStop(0, 'rgba(250, 204, 21, 0)');
+    beamGrad.addColorStop(0.5, 'rgba(192, 132, 252, 0.38)');
+    beamGrad.addColorStop(1, 'rgba(250, 204, 21, 0.65)');
+    ctx.fillStyle = beamGrad;
+    ctx.fillRect(-16, -140, 32, 156);
   }
 
   // Ground Shadow & Rank Aura Ring
@@ -1344,6 +1597,51 @@ function drawArticulatedDisciple(
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.ellipse(0, 12, 14, 5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Per-Rank Ground Effects (1 xu Đệ Tử smoke -> 5 xu Chân Truyền Ma Ấn -> 10 xu Tinh Anh rays -> 20 xu Hộ Pháp dark qi -> 99 xu Đồng Tôn seal -> 199 xu Giáo Chủ dragon aura)
+  if (d.rankId === 'de_tu' || d.rankId === 'ngoai_mon_do_de') {
+    ctx.fillStyle = 'rgba(192, 132, 252, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(Math.sin(t * 3 + phase) * 2, 12, 12, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (d.rankId === 'chan_truyen' || d.rankId === 'noi_mon_de_tu') {
+    ctx.strokeStyle = 'rgba(168, 85, 247, 0.78)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 14, 5.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 9, 3.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (d.rankId === 'tinh_anh' || d.rankId === 'su_huynh_su_ty') {
+    ctx.strokeStyle = 'rgba(236, 72, 153, 0.8)';
+    ctx.lineWidth = 1.4;
+    for (let r = 0; r < 6; r++) {
+      const ang = t * 3.2 + (r * Math.PI) / 3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ang) * 7, 12 + Math.sin(ang) * 2.5);
+      ctx.lineTo(Math.cos(ang) * 15, 12 + Math.sin(ang) * 5.5);
+      ctx.stroke();
+    }
+  } else if (d.rankId === 'ho_phap' || d.rankId === 'tinh_anh_de_tu') {
+    ctx.strokeStyle = 'rgba(220, 38, 38, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 15 + Math.sin(t * 6) * 1.5, 6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (
+    d.rankId === 'dong_ton' ||
+    d.rankId === 'dai_truong_lao' ||
+    d.rankId === 'dong_ton_giao_chu' ||
+    d.rankId === 'giao_chu' ||
+    d.rankId === 'tan_giao_chu'
+  ) {
+    ctx.strokeStyle = '#FACC15';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 16 + Math.sin(t * 5) * 2, 6.5, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -1425,8 +1723,13 @@ function drawArticulatedDisciple(
     ctx.stroke();
   }
 
-  // Flowing Cape for Elite / Guardian / Elder / Co-Leader / Sect Leader ranks
+  // Flowing Cape for Tinh Anh / Hộ Pháp / Trưởng Lão / Đồng Tôn / Giáo Chủ ranks
   if (
+    d.rankId === 'tinh_anh' ||
+    d.rankId === 'ho_phap' ||
+    d.rankId === 'truong_lao' ||
+    d.rankId === 'dong_ton' ||
+    d.rankId === 'giao_chu' ||
     d.rankId === 'su_huynh_su_ty' ||
     d.rankId === 'tinh_anh_de_tu' ||
     d.rankId === 'ho_phap_ma_giao' ||
@@ -1458,6 +1761,20 @@ function drawArticulatedDisciple(
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+
+  // Martial Armor Shoulder Pauldrons for Hộ Pháp (20 xu) and higher
+  if (
+    d.rankId === 'ho_phap' ||
+    d.rankId === 'truong_lao' ||
+    d.rankId === 'dong_ton' ||
+    d.rankId === 'giao_chu' ||
+    d.rankId === 'tinh_anh_de_tu' ||
+    d.rankId === 'ho_phap_ma_giao'
+  ) {
+    ctx.fillStyle = d.secondaryColor;
+    ctx.fillRect(-torsoHalfW - 2, -10.5, 3.5, 3);
+    ctx.fillRect(torsoHalfW - 1.5, -10.5, 3.5, 3);
+  }
 
   // Rear back-emblem vs Front lapel collar
   if (d.direction === 'rear') {
@@ -1583,7 +1900,14 @@ function drawArticulatedDisciple(
   }
 
   // Gender Hair Bun / Rank Crown Accessory
-  if (d.rankId === 'tan_giao_chu' || d.rankId === 'dong_ton_giao_chu' || d.rankId === 'dai_truong_lao') {
+  if (
+    d.rankId === 'giao_chu' ||
+    d.rankId === 'dong_ton' ||
+    d.rankId === 'truong_lao' ||
+    d.rankId === 'tan_giao_chu' ||
+    d.rankId === 'dong_ton_giao_chu' ||
+    d.rankId === 'dai_truong_lao'
+  ) {
     ctx.fillStyle = '#FBBF24';
     ctx.fillRect(-4, -25 + headBowY, 8, 3.5);
   } else if (d.gender === 'nu') {

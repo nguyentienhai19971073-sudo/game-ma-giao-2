@@ -15,6 +15,47 @@ const CRISP_TEXT_SHADOW: React.CSSProperties = {
   textShadow: '0 1px 3px rgba(0, 0, 0, 0.96), 0 0 6px rgba(0, 0, 0, 0.85)',
 };
 
+/**
+ * Custom Ma Giáo Sacred Seal SVG Emblem (replaces all generic TikTok gift emojis in PHONG CẤP)
+ */
+const MaGiaoRankEmblemSVG: React.FC<{
+  coreColor: string;
+  flameColor?: string;
+  isApocalypse?: boolean;
+}> = ({ coreColor, flameColor = '#A855F7', isApocalypse = false }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className="w-3 h-3 shrink-0 inline-block mr-1"
+    aria-hidden="true"
+  >
+    <circle
+      cx="12"
+      cy="12"
+      r="10.2"
+      fill="#12071D"
+      stroke="#D4AF37"
+      strokeWidth="1.8"
+    />
+    <polygon
+      points="12,3.2 14.6,8.4 20.2,9.2 16,13.2 17,18.8 12,16 7,18.8 8,13.2 3.8,9.2 9.4,8.4"
+      fill={flameColor}
+      fillOpacity="0.42"
+      stroke="#D4AF37"
+      strokeWidth="0.9"
+    />
+    <path
+      d="M12 5.2 C14.8 8.5, 16.5 11.2, 12 18.2 C7.5 11.2, 9.2 8.5, 12 5.2 Z"
+      fill={coreColor}
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r={isApocalypse ? '3.1' : '2.2'}
+      fill={isApocalypse ? '#FEF08A' : '#FDE68A'}
+    />
+  </svg>
+);
+
 export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
   snapshot,
 }) => {
@@ -29,10 +70,16 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
     elderLeaderboard,
     promotions,
     miniGame,
+    dietMon,
   } = snapshot;
 
   const { overlayConfig, commentSettings, noticePanels } = config;
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const [avatarLoadError, setAvatarLoadError] = useState<boolean>(false);
+
+  useEffect(() => {
+    setAvatarLoadError(false);
+  }, [dietMon?.triggerAvatarUrl, dietMon?.startedAt]);
 
   // Smooth 50ms clock for 0.7s fade-out and 4.0s auto-unmount of temporary popups
   useEffect(() => {
@@ -169,6 +216,49 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
     }
     return { moving, kungfu, meditating };
   }, [disciples]);
+
+  // Official rank rows in PHONG CẤP table (dynamically bound to config.ranks + Diệt Môn threshold)
+  const phongCapRows = useMemo(() => {
+    const sorted = [...config.ranks]
+      .filter(r => r.minCoins > 0)
+      .sort((a, b) => a.minCoins - b.minCoins);
+    return sorted.map(r => {
+      let textColor = 'text-emerald-300';
+      let coreColor = '#10B981';
+      let flameColor = '#A855F7';
+      if (r.minCoins >= 199) {
+        textColor = 'text-yellow-300 font-bold';
+        coreColor = '#EF4444';
+        flameColor = '#FACC15';
+      } else if (r.minCoins >= 99) {
+        textColor = 'text-amber-300 font-bold';
+        coreColor = '#F59E0B';
+        flameColor = '#E879F9';
+      } else if (r.minCoins >= 50) {
+        textColor = 'text-rose-200';
+        coreColor = '#F43F5E';
+      } else if (r.minCoins >= 20) {
+        textColor = 'text-fuchsia-200';
+        coreColor = '#D946EF';
+      } else if (r.minCoins >= 10) {
+        textColor = 'text-purple-200';
+        coreColor = '#A855F7';
+      } else if (r.minCoins >= 5) {
+        textColor = 'text-sky-300';
+        coreColor = '#38BDF8';
+      }
+      return {
+        id: r.id,
+        coins: r.minCoins,
+        name: r.displayName,
+        textColor,
+        coreColor,
+        flameColor,
+      };
+    });
+  }, [config.ranks]);
+
+  const dietMonThreshold = config.dietMonConfig?.coinThreshold || 1000;
 
   return (
     <div
@@ -317,52 +407,37 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
         </div>
       )}
 
-      {/* 4. UPPER-RIGHT FIXED PANEL: BẢNG PHONG CẤP (BACKGROUND OPACITY 0.4, CRISP TEXT) */}
+      {/* 4. UPPER-RIGHT FIXED PANEL: BẢNG PHONG CẤP (CUSTOM MA GIÁO SVG EMBLEMS, NO GIFT EMOJIS) */}
       {overlayConfig.showGiftRankTable && isPanelEnabled('gift_rank_table') && (
         <div
           data-testid="panel-gift-rank-table"
-          className="magiao-hud-panel absolute right-1.5 z-20 w-[27.5%] rounded-lg border border-[#D4AF37]/70 p-1.5 shadow-md"
+          className="magiao-hud-panel absolute right-1.5 z-20 w-[28.5%] rounded-lg border border-[#D4AF37]/70 p-1.5 shadow-md"
           style={{
             top: '8.2%',
             backgroundColor: `rgba(12, 8, 22, ${panelBgOpacity})`,
             ...CRISP_TEXT_SHADOW,
           }}
         >
-          <div className="text-[8px] font-bold uppercase tracking-wider text-amber-300 border-b border-amber-400/35 pb-0.5 mb-0.5">
-            🎁 PHONG CẤP
+          <div className="text-[8px] font-bold uppercase tracking-wider text-amber-300 border-b border-amber-400/35 pb-0.5 mb-0.5 flex items-center gap-1">
+            <MaGiaoRankEmblemSVG coreColor="#EF4444" flameColor="#F59E0B" />
+            <span>PHONG CẤP</span>
           </div>
-          <div className="space-y-0.2 text-[7.5px] leading-tight tabular-nums font-semibold">
-            <div className="flex justify-between text-white">
-              <span>🌹 1x</span>
-              <span className="text-emerald-300">Ngoại Môn</span>
-            </div>
-            <div className="flex justify-between text-white">
-              <span>🍵 5x</span>
-              <span className="text-sky-300">Nội Môn</span>
-            </div>
-            <div className="flex justify-between text-white">
-              <span>🍶 10x</span>
-              <span className="text-indigo-200">Sư Huynh</span>
-            </div>
-            <div className="flex justify-between text-white">
-              <span>⚔️ 20x</span>
-              <span className="text-purple-200">Tinh Anh</span>
-            </div>
-            <div className="flex justify-between text-white">
-              <span>🛡️ 50x</span>
-              <span className="text-fuchsia-200">Hộ Pháp</span>
-            </div>
-            <div className="flex justify-between text-white">
-              <span>📜 99x</span>
-              <span className="text-rose-200">Trưởng Lão</span>
-            </div>
-            <div className="flex justify-between text-amber-200 font-bold">
-              <span>👑 199x</span>
-              <span className="text-amber-300">Đồng Tôn</span>
-            </div>
-            <div className="flex justify-between text-red-200 font-bold pt-0.5 border-t border-amber-400/35">
-              <span>🐉 Chí Tôn</span>
-              <span className="text-yellow-300">GIÁO CHỦ</span>
+          <div className="space-y-0.5 text-[7.5px] leading-tight tabular-nums font-semibold">
+            {phongCapRows.map(row => (
+              <div key={row.id} className="flex items-center justify-between text-white">
+                <span className="flex items-center font-mono text-amber-100">
+                  <MaGiaoRankEmblemSVG coreColor={row.coreColor} flameColor={row.flameColor} />
+                  {row.coins}
+                </span>
+                <span className={`truncate ml-1 ${row.textColor}`}>{row.name}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between text-red-200 font-bold pt-0.5 border-t border-amber-400/40">
+              <span className="flex items-center font-mono text-yellow-300">
+                <MaGiaoRankEmblemSVG coreColor="#DC2626" flameColor="#FACC15" isApocalypse />
+                {dietMonThreshold}
+              </span>
+              <span className="text-red-400 tracking-tight">DIỆT MÔN</span>
             </div>
           </div>
         </div>
@@ -597,6 +672,120 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
           </React.Fragment>
         );
       })}
+
+      {/* 9B. ĐẠI SỰ KIỆN DIỆT MÔN (1.000 XU) CENTRAL AVATAR, ROTATING MA ẤN & PHASE BANNER */}
+      {dietMon?.isActive && (
+        <div
+          data-testid="overlay-diet-mon"
+          className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center"
+        >
+          {/* Top Phase Indicator Pill */}
+          <div
+            className="absolute top-[15.5%] left-3 right-3 px-3 py-1.5 rounded-xl border border-red-500/85 text-center shadow-2xl"
+            style={{
+              backgroundColor: 'rgba(28, 4, 16, 0.78)',
+              ...CRISP_TEXT_SHADOW,
+            }}
+          >
+            <div className="text-[10px] font-bold uppercase tracking-widest text-red-400 font-['Cinzel']">
+              ⚡ MA GIÁO ĐẠI KIẾP • DIỆT MÔN ({Math.max(0, Math.ceil((1 - dietMon.progress) * (config.dietMonConfig?.durationSec || 15)))}s) ⚡
+            </div>
+            <div className="text-[11.5px] font-extrabold text-amber-300 mt-0.5">
+              {dietMon.triggerDisplayName} ĐÃ KÍCH HOẠT DIỆT MÔN!
+            </div>
+            <div className="text-[8.5px] text-purple-200 font-semibold mt-0.5">
+              {dietMon.phase === 'tremor' && 'Giai đoạn 1/5: Đại Điện Rung Chuyển Dữ Dội (0–3s)'}
+              {dietMon.phase === 'collapse' && 'Giai đoạn 2/5: Trụ Rồng Nứt Vỡ • Đại Điện Đổ Sập (3–6s)'}
+              {dietMon.phase === 'avatar_descend' && 'Giai đoạn 3/5: Chân Dung Bá Chủ Diệt Môn Giáng Thế (6–9s)'}
+              {dietMon.phase === 'vortex_suck' && `Giai đoạn 4/5: Hố Đen Ma Pháp Cuốn Phăng Toàn Bộ Nhân Vật (9–12s)`}
+              {dietMon.phase === 'rebuild' && 'Giai đoạn 5/5: Tái Thiết Đại Điện Ma Giáo Từ Tro Tàn (12–15s)'}
+            </div>
+          </div>
+
+          {/* Giant Central TikTok Avatar + Rotating Ma Ấn Frame (Visible in Phase 3 & Phase 4) */}
+          {config.dietMonConfig?.showBigAvatar !== false &&
+            (dietMon.phase === 'avatar_descend' || dietMon.phase === 'vortex_suck') && (
+              <div
+                data-testid="diet-mon-central-avatar"
+                className="relative flex flex-col items-center justify-center transition-transform duration-300"
+                style={{
+                  transform: `scale(${
+                    dietMon.phase === 'avatar_descend'
+                      ? (0.55 + dietMon.phaseProgress * 0.45) * (config.dietMonConfig?.avatarScale || 1)
+                      : (1.0 - dietMon.phaseProgress * 0.15) * (config.dietMonConfig?.avatarScale || 1)
+                  })`,
+                  ...CRISP_TEXT_SHADOW,
+                }}
+              >
+                {/* Outer Rotating Crimson-Purple Ma Ấn SVG Seal */}
+                <div className="relative w-40 h-40 flex items-center justify-center">
+                  <svg
+                    viewBox="0 0 200 200"
+                    className="absolute inset-0 w-full h-full animate-spin"
+                    style={{ animationDuration: '6s' }}
+                  >
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r="94"
+                      fill="none"
+                      stroke="#D4AF37"
+                      strokeWidth="3"
+                      strokeDasharray="14 8"
+                    />
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r="84"
+                      fill="rgba(88, 28, 135, 0.35)"
+                      stroke="#EC4899"
+                      strokeWidth="2.5"
+                    />
+                    <polygon
+                      points="100,10 124,66 184,74 138,114 150,174 100,142 50,174 62,114 16,74 76,66"
+                      fill="rgba(220, 38, 38, 0.25)"
+                      stroke="#FACC15"
+                      strokeWidth="2"
+                    />
+                  </svg>
+
+                  {/* Circular Player TikTok Avatar or Fallback Ma Giáo Sacred Emblem */}
+                  <div className="relative z-10 w-28 h-28 rounded-full overflow-hidden border-4 border-amber-400 shadow-[0_0_30px_rgba(236,72,153,0.95)] bg-[#160724] flex items-center justify-center">
+                    {dietMon.triggerAvatarUrl && !avatarLoadError ? (
+                      <img
+                        src={dietMon.triggerAvatarUrl}
+                        alt={dietMon.triggerDisplayName}
+                        onError={() => setAvatarLoadError(true)}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <svg viewBox="0 0 100 100" className="w-20 h-20">
+                        <circle cx="50" cy="50" r="44" fill="#2A081C" stroke="#D4AF37" strokeWidth="3" />
+                        <path
+                          d="M50 16 C65 34, 78 46, 50 82 C22 46, 35 34, 50 16 Z"
+                          fill="#DC2626"
+                          stroke="#FACC15"
+                          strokeWidth="2"
+                        />
+                        <circle cx="50" cy="52" r="12" fill="#FDE047" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+
+                {/* Trigger Player Display Name & Title Badge */}
+                <div className="mt-2 px-4 py-1 rounded-full bg-gradient-to-r from-red-950/90 via-purple-950/95 to-red-950/90 border-2 border-amber-400 text-center shadow-2xl">
+                  <div className="text-xs font-extrabold text-yellow-300 tracking-wide">
+                    {dietMon.triggerDisplayName}
+                  </div>
+                  <div className="text-[9px] font-bold text-red-300 uppercase tracking-widest">
+                    BÁ CHỦ DIỆT MÔN • {dietMon.triggerCoins} XU
+                  </div>
+                </div>
+              </div>
+            )}
+        </div>
+      )}
 
       {/* 10. BOTTOM COMMAND GUIDE BAR */}
       <div className="absolute bottom-1 left-2 right-2 z-20 flex items-center justify-between px-2.5 py-1 rounded bg-black/80 border border-amber-500/35 text-[8.5px] text-amber-200/90">
