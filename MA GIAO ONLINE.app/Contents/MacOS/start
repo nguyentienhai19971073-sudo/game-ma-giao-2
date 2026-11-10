@@ -1,0 +1,49 @@
+#!/bin/bash
+set -u
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1090
+  . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 || true
+fi
+
+APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
+GAME_ROOT="$(cd "$APP_BUNDLE/.." && pwd)"
+LAUNCHER_SCRIPT="$GAME_ROOT/tools/ma-giao-launcher/launcher.cjs"
+RUNTIME_DIR="$GAME_ROOT/.launcher-runtime"
+PID_FILE="$RUNTIME_DIR/launcher-ui.pid"
+LOG_FILE="$RUNTIME_DIR/launcher-ui.log"
+CONTROL_URL="http://127.0.0.1:3388/"
+
+mkdir -p "$RUNTIME_DIR"
+
+if ! command -v node >/dev/null 2>&1; then
+  osascript -e 'display dialog "Không tìm thấy Node.js trên máy.\nVui lòng cài Node.js LTS tại https://nodejs.org rồi mở lại MA GIAO ONLINE." buttons {"OK"} default button "OK" with icon stop with title "MA GIAO ONLINE"' >/dev/null 2>&1 || true
+  exit 1
+fi
+
+if [ ! -f "$LAUNCHER_SCRIPT" ]; then
+  osascript -e 'display dialog "Không tìm thấy bộ khởi động tại tools/ma-giao-launcher/launcher.cjs.\nHãy đặt MA GIAO ONLINE.app ngay trong thư mục gốc của mã nguồn game." buttons {"OK"} default button "OK" with icon stop with title "MA GIAO ONLINE"' >/dev/null 2>&1 || true
+  exit 1
+fi
+
+if curl -fsS "${CONTROL_URL}api/status" >/dev/null 2>&1; then
+  open "$CONTROL_URL"
+  exit 0
+fi
+
+cd "$GAME_ROOT" || exit 1
+nohup node "$LAUNCHER_SCRIPT" --game "$GAME_ROOT" --no-open >>"$LOG_FILE" 2>&1 &
+echo $! >"$PID_FILE"
+
+for _ in $(seq 1 25); do
+  if curl -fsS "${CONTROL_URL}api/status" >/dev/null 2>&1; then
+    open "$CONTROL_URL"
+    exit 0
+  fi
+  sleep 0.2
+done
+
+open "$CONTROL_URL"
+exit 0

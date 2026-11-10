@@ -1,0 +1,6 @@
+{
+  "name": "MA GIÁO ONLINE – THIÊN HẠ ĐỆ NHẤT TÀ PHÁI",
+  "description": "Game võ hiệp hài hước tương tác TikTok LIVE 9:16 kế thừa nền tảng kỹ thuật Chùa Online 2 với Giáo Chủ 35 hoạt ảnh, 80 đồ đệ 2D tự sinh hoạt, 3 Mini Game luyện võ, Azure & VieNeu TTS, OBS Sync và Hệ thống Quản trị 20 danh mục.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,1426 @@
+# MASTER PROMPT – XÂY DỰNG GAME MA GIÁO ONLINE
+## THIÊN HẠ ĐỆ NHẤT TÀ PHÁI
+### Game võ hiệp hài hước tương tác TikTok LIVE – React, TypeScript, Node.js, 2D Animation
+
+---
+
+# PHẦN 1. MỤC TIÊU DỰ ÁN
+
+Tôi muốn xây dựng một game hoàn chỉnh mang tên:
+
+**MA GIÁO ONLINE – THIÊN HẠ ĐỆ NHẤT TÀ PHÁI**
+
+Đây là game tương tác TikTok LIVE theo phong cách võ hiệp cổ trang, huyền huyễn, hài hước.
+
+**QUAN TRỌNG NHẤT:**
+
+Tôi đã có một game tên **CHÙA ONLINE 2 / TĨNH TÂM ONLINE**, với hệ thống TikTok LIVE, nhân vật 2D, quản trị Admin, giọng đọc TTS, sự kiện quà, bình luận, OBS Sync, hệ thống thông báo và nhiều chức năng đã phát triển.
+
+Tôi muốn **LẤY TOÀN BỘ GAME CHÙA ONLINE 2 LÀM NỀN TẢNG KỸ THUẬT** để tạo phiên bản MA GIÁO ONLINE.
+
+Không được chỉ lấy ý tưởng rồi tạo một website khác có giao diện đơn giản.
+
+Không được xây một trò chơi mới chỉ có vài nhân vật đứng im và vài nút mô phỏng.
+
+Phải kế thừa cấu trúc dự án, hệ thống xử lý sự kiện, quản trị, lưu dữ liệu, giọng đọc, hiển thị nhân vật và những chức năng kỹ thuật hữu ích từ bản gốc.
+
+**Repository tham chiếu:**
+https://github.com/nguyentienhai19971073-sudo/game-chua-moi-2
+
+Trước tiên, hãy kiểm tra quyền truy cập repository và đọc mã nguồn thực tế. Nếu môi trường hiện tại chưa truy cập được, hãy nêu rõ cần nhập hoặc kết nối mã nguồn. Không được giả vờ đã đọc repository.
+
+Tạo dự án MA GIÁO ONLINE độc lập, không chỉnh sửa hoặc ghi đè dự án Chùa Online 2 gốc.
+
+## 1.1. Nguyên tắc phát triển
+
+- Tận dụng React, TypeScript, Vite, Node.js và engine hiển thị đang có.
+- Giữ và tái sử dụng hệ thống kết nối TikTok LIVE.
+- Giữ cơ chế nhận bình luận, quà, Like và thông tin người dùng.
+- Giữ hệ thống hiện thị tên, bong bóng bình luận và chống chồng lấn.
+- Giữ hệ thống quản trị chuyên sâu.
+- Giữ tích hợp Microsoft Azure Speech và VieNeu TTS.
+- Giữ khả năng phát OBS ở tỷ lệ 9:16.
+- Giữ chức năng đồng bộ dữ liệu và thiết lập giữa Admin, trình duyệt và OBS.
+- Giữ cơ chế Launcher trên macOS và Windows, điều chỉnh để chạy dự án Ma Giáo.
+- Các chức năng mang chủ đề Chùa Online phải được chuyển đổi thành tính năng tương ứng của Ma Giáo, thay vì xóa đi và làm mất năng lực kỹ thuật.
+- Phát triển các chức năng mới thành module độc lập và dễ bảo trì.
+- Mọi chức năng phải chạy thực tế, không phải giao diện demo giả.
+
+**Không được báo đã hoàn thành nếu mới chỉ tạo giao diện mà backend, animation hoặc xử lý sự kiện chưa hoạt động.**
+
+---
+
+# PHẦN 2. PHONG CÁCH VÀ THẾ GIỚI MA GIÁO
+
+## 2.1. Bối cảnh
+
+Thế giới Ma Giáo là một môn phái võ hiệp cổ trang nằm trên núi cao, với đại điện huyền bí, ngai vàng, đèn lồng, cờ phướn, trận pháp và sân luyện võ.
+
+Phong cách thị giác:
+
+- Võ hiệp Trung Hoa huyền huyễn.
+- Sang trọng, uy nghiêm, bí ẩn.
+- Tông màu chủ đạo: đen, đỏ thẫm, tím huyền ảo và vàng đồng.
+- Có thể sử dụng ánh sáng lạnh, khói mỏng, năng lượng võ thuật và đèn lồng.
+- Hình ảnh có chiều sâu và không khí sống động.
+- Không sử dụng hình ảnh máu me, tra tấn hoặc bạo lực ghê rợn.
+- Cảm giác tà phái chỉ nằm trong thế giới võ hiệp giả tưởng và yếu tố hài hước.
+
+Toàn bộ game được thiết kế ưu tiên **khung hình dọc 9:16**, phù hợp TikTok LIVE, Chrome và OBS.
+
+## 2.2. Sảnh chính Ma Giáo
+
+Thay bối cảnh Chùa Online bằng **ĐẠI ĐIỆN MA GIÁO**.
+
+Bố cục:
+
+**Phần trên cùng:**
+- Giáo Chủ ngồi trên ngai đen đỏ.
+- Phía sau có biểu tượng Ma Giáo lớn.
+- Hai bên có hộ pháp.
+- Có bậc thềm dẫn lên ngai.
+- Có hiệu ứng ánh sáng, cờ và khói nhẹ.
+
+**Phần giữa:**
+- Lối đi chính thẳng, cân đối.
+- Không được làm lối đi loe hình chữ V quá rộng.
+- Có chỗ cho nhân vật tiến lên gặp Giáo Chủ.
+- Có không gian biểu diễn võ công và phong chức.
+
+**Phần dưới:**
+- Khu vực tập trung đồ đệ.
+- Các hành lang, thảm tập, góc thiền định và khu giao lưu.
+- Nhân vật có thể đi lại giữa những khu vực này.
+
+Tất cả thành phần phải nằm trong vùng an toàn của khung hình TikTok 9:16.
+
+Giáo Chủ phải nổi bật nhưng không che khuất người chơi.
+
+---
+
+# PHẦN 3. HỆ THỐNG 80 NHÂN VẬT NGƯỜI CHƠI
+
+## 3.1. Người chơi xuất hiện khi bình luận
+
+Khi người xem TikTok LIVE gửi bình luận đầu tiên:
+
+1. Lấy TikTok user ID và tên hiển thị.
+2. Kiểm tra người đó đã có nhân vật trong phiên chưa.
+3. Nếu chưa có, tạo một nhân vật dân thường 2D.
+4. Nhân vật xuất hiện tại cổng Ma Giáo.
+5. Đi vào đại điện với hoạt ảnh đi bộ.
+6. Cúi chào Giáo Chủ.
+7. Tìm vị trí sinh hoạt hợp lệ.
+8. Bắt đầu tham gia các hoạt động trong sảnh.
+
+Nếu người chơi đã tồn tại, không tạo trùng nhân vật.
+
+Người mới mặc trang phục dân thường cổ trang, có thể ngẫu nhiên là nam hoặc nữ. Có thể thêm từ khóa chọn ngoại hình như "nam", "nữ" và các kiểu nhân vật khác trong Admin.
+
+## 3.2. Số lượng người chơi
+
+Mặc định:
+- 80 nhân vật hiển thị đồng thời.
+- Tương đương 80 vị trí hoạt động và tập trung.
+- Có thể điều chỉnh số lượng trong Admin.
+- Có hàng chờ khi vượt quá số nhân vật hiển thị.
+- Có thể tiếp nhận hàng trăm người tham gia trong một phiên LIVE.
+
+Không để hai nhân vật chiếm cùng một vị trí đứng, ngồi hoặc thiền.
+
+## 3.3. Hoạt ảnh người chơi
+
+Nhân vật phải là **2D hoạt hình thực sự**, không phải hình tĩnh chỉ chuyển tọa độ.
+
+Tạo ít nhất 15 hoạt ảnh:
+
+1. Đứng nghỉ.
+2. Đi bộ.
+3. Chạy.
+4. Cúi chào.
+5. Đấm.
+6. Đá.
+7. Múa quyền liên hoàn.
+8. Nhảy.
+9. Né tránh.
+10. Ngồi thiền.
+11. Đứng dậy.
+12. Vỗ tay.
+13. Ăn mừng.
+14. Loạng choạng hài hước.
+15. Rời khỏi đại điện.
+
+Hoạt ảnh phải đúng hướng nhìn:
+- Khi đi sâu vào sảnh, nhân vật quay lưng về camera.
+- Khi đi ra cổng, nhân vật có thể quay mặt về camera.
+- Khi đi ngang, sử dụng hoạt ảnh nhìn nghiêng.
+- Khi luyện võ, phải nhìn thấy tay, chân và tư thế rõ ràng.
+
+Không dùng mô hình 3D low-poly để thay thế nhân vật 2D.
+
+## 3.4. Nhân vật tự sinh hoạt
+
+Đây là một chức năng bắt buộc.
+
+**Không được để 80 nhân vật chỉ đứng im chờ bình luận.**
+
+Mỗi nhân vật có hành vi tự động riêng:
+
+- Tự đi dạo.
+- Đi qua lại trong đại điện.
+- Đến sân nhỏ để múa võ.
+- Luyện đấm, đá, quyền pháp.
+- Ngồi thiền.
+- Đứng dậy.
+- Nhảy khởi động.
+- Đi tới chào Giáo Chủ.
+- Đứng xem người khác luyện võ.
+- Giao lưu với nhân vật khác.
+- Nghỉ ngơi.
+- Trở về vị trí ban đầu.
+
+Các hành vi được chọn ngẫu nhiên với khoảng nghỉ tự nhiên.
+
+Ví dụ, khi có 80 người trong đại điện:
+- Một nhóm đang đi dạo.
+- Một nhóm luyện quyền.
+- Một nhóm ngồi thiền.
+- Một số đứng nghỉ.
+- Một số tới gần ngai để cúi chào.
+- Một số vỗ tay xem biểu diễn.
+
+Không để toàn bộ 80 người cùng thực hiện một hành động trừ khi Giáo Chủ ra lệnh tập thể.
+
+Mặc định chỉ khoảng 20–30% nhân vật hoạt động mạnh cùng lúc; tỷ lệ này chỉnh được trong Admin.
+
+## 3.5. Di chuyển thông minh
+
+Tạo hệ thống điều khiển hành vi và di chuyển:
+
+- Finite State Machine.
+- Tìm đường giữa các khu vực.
+- Kiểm tra vật cản.
+- Tránh chồng lấn nhân vật.
+- Giữ khoảng cách hợp lý.
+- Dành lối đi trống cho Giáo Chủ.
+- Không xuyên tường.
+- Không xuyên ngai vàng.
+- Không chạy ra ngoài khung hình.
+- Không đứng chắn vị trí xuất hiện của người mới.
+- Có cơ chế dành chỗ cho người ngồi thiền hoặc biểu diễn.
+
+Khi một hành động kết thúc, nhân vật có thể nghỉ ngắn rồi thực hiện hành động khác.
+
+## 3.6. Điều khiển qua bình luận
+
+Tạo bộ từ khóa:
+
+| Bình luận | Hành động |
+|---|---|
+| đi | Đi dạo |
+| chạy | Chạy |
+| võ | Luyện quyền |
+| múa | Múa võ liên hoàn |
+| đấm | Đấm võ |
+| đá | Đá võ |
+| nhảy | Nhảy |
+| thiền | Đi tới chỗ trống và ngồi thiền |
+| đứng | Đứng dậy |
+| chào | Cúi chào Giáo Chủ |
+
+Mỗi từ khóa phải kích hoạt hoạt ảnh tương ứng của đúng người chơi.
+
+Có cooldown để tránh xử lý lệnh liên tục.
+
+Không yêu cầu người xem gửi nhiều bình luận lặp lại để duy trì một hành động.
+
+## 3.7. Tên và bình luận
+
+Kế thừa hệ thống từ Chùa Online 2:
+
+- Tên TikTok đi theo nhân vật.
+- Có tùy chọn giới hạn ký tự tên, mặc định 5 ký tự bao gồm dấu rút gọn.
+- Chỉnh font, kích thước, màu và vị trí tên.
+- Bong bóng bình luận xuất hiện gần đầu nhân vật.
+- Chỉnh thời gian hiển thị và fade.
+- Chống chồng bong bóng.
+- Không để bình luận che Giáo Chủ, HUD hoặc bảng sự kiện.
+- Tên nhân vật không tự mất khi bong bóng bình luận biến mất.
+
+---
+
+# PHẦN 4. GIÁO CHỦ – NHÂN VẬT TRUNG TÂM
+
+Giáo Chủ phải là nhân vật nổi bật nhất.
+
+**Không được sử dụng một ảnh tĩnh rồi chỉ phóng to, rung hoặc xoay để giả hoạt ảnh.**
+
+Tạo nhân vật Giáo Chủ 2D có thể điều khiển chuyển động toàn thân và biểu cảm khuôn mặt.
+
+## 4.1. Ngoại hình
+
+- Nam cao thủ võ hiệp.
+- Tóc bạc dài hoặc tóc đen dài tùy thiết lập.
+- Áo bào đen đỏ.
+- Tay áo rộng.
+- Hoa văn rồng hoặc họa tiết Ma Giáo.
+- Thần thái kiêu ngạo.
+- Có quạt, chén trà và các đạo cụ riêng.
+- Có thể ngồi ngai, đứng, đi lại và luyện võ.
+- Tóc và áo bào chuyển động phù hợp với từng hoạt ảnh.
+
+## 4.2. Tính cách
+
+Giáo Chủ tự nhận mình là người tà ác nhất thiên hạ.
+
+Nhưng những chuyện hắn khoe khoang thực ra rất ngớ ngẩn.
+
+Ví dụ:
+
+"Ha ha ha! Ta đã làm nhiều chuyện đen tối đến mức các ngươi không tưởng tượng nổi! Ta từng ăn hết bánh quy rồi đặt hộp rỗng trở lại tủ!"
+
+"Ta đã lén dán kẹo cao su dưới bàn của chính mình! Ha ha! Đến lúc ngồi xuống mới nhớ ra!"
+
+"Bổn tọa từng giấu điều khiển tivi dưới gối, khiến cả nhà tìm kiếm suốt một buổi!"
+
+"Ta đã luyện tà công ba năm chỉ để bóc một quả trứng luộc không bị dính vỏ!"
+
+"Tất cả đồ đệ hãy nghe đây! Hôm nay bổn tọa sẽ biểu diễn tuyệt học... ngủ ngồi không ngã!"
+
+Tất cả lời thoại phải phù hợp bối cảnh giả tưởng, hài hước, không đe dọa người thật hoặc xúc phạm cá nhân.
+
+## 4.3. Bộ 35 hoạt ảnh Giáo Chủ
+
+### Nhóm A: Sinh hoạt trên ngai
+
+1. `throne_idle` – Ngồi uy nghiêm, thở và nhìn quanh.
+2. `stroke_beard` – Vuốt cằm suy nghĩ.
+3. `drink_tea` – Nâng chén trà lên uống.
+4. `evil_laugh` – Cười lớn đắc ý.
+5. `doze_off` – Ngủ gật rồi giật mình.
+6. `tap_throne` – Gõ tay lên ngai.
+7. `fan_self` – Phẩy quạt.
+8. `bored_pose` – Chống cằm chán nản.
+
+### Nhóm B: Đứng dậy và di chuyển
+
+9. `stand_from_throne` – Đứng dậy.
+10. `walk_down_steps` – Bước xuống ngai.
+11. `patrol_hall` – Đi tuần đại điện.
+12. `hands_behind_back` – Đi chắp tay sau lưng.
+13. `turn_around` – Quay người.
+14. `return_to_throne` – Trở về ngai và ngồi xuống.
+15. `shadow_teleport` – Dịch chuyển bằng khói tím.
+
+### Nhóm C: Võ công
+
+16. `gather_inner_power` – Vận nội công.
+17. `palm_strike` – Tung chưởng.
+18. `martial_arts_combo` – Đấm đá liên hoàn.
+19. `lightness_skill` – Khinh công.
+20. `summon_energy_dragon` – Triệu hồi rồng năng lượng.
+21. `shadow_clones` – Tạo phân thân.
+22. `magic_barrier` – Tạo kết giới.
+23. `failed_kungfu` – Luyện võ thất bại hài hước.
+
+### Nhóm D: Biểu cảm
+
+24. `smug_laugh` – Cười khoái chí.
+25. `shocked` – Há hốc miệng ngạc nhiên.
+26. `facepalm` – Đập tay lên trán.
+27. `scold_disciple` – Chỉ tay trách đồ đệ.
+28. `belly_laugh` – Ôm bụng cười.
+29. `comical_rage` – Nổi giận hài hước.
+30. `trip_on_robe` – Vấp áo choàng.
+
+### Nhóm E: Tương tác người chơi
+
+31. `promote_disciple` – Phong chức.
+32. `grant_robe` – Ban trang phục mới.
+33. `welcome_elder` – Đón Trưởng Lão.
+34. `equal_to_leader` – Mời người đạt 199 xu lên cạnh ngai.
+35. `transfer_throne` – Nhường ngai cho Tân Giáo Chủ.
+
+Từng hoạt ảnh phải có tài nguyên, trạng thái, thời lượng, điều kiện kích hoạt và chuyển tiếp.
+
+Không được khai báo 35 tên hoạt ảnh nhưng tất cả cùng sử dụng một chuyển động giả.
+
+## 4.4. Giáo Chủ tự hoạt động
+
+Xây dựng `SectLeaderAnimationController` và hệ thống AI Director điều khiển hành vi.
+
+Khi không có sự kiện, cứ khoảng 15–35 giây Giáo Chủ tự lựa chọn:
+
+- Uống trà.
+- Cười tà.
+- Vuốt cằm.
+- Phẩy quạt.
+- Đi xuống ngai.
+- Đi dạo.
+- Luyện quyền.
+- Ngủ gật.
+- Trêu hộ pháp.
+- Kể chuyện hài.
+- Quan sát đồ đệ.
+
+Không phát các hoạt ảnh xung đột đồng thời.
+
+## 4.5. Ba trạng thái tính cách
+
+**BÁ CHỦ:** Uy nghiêm, ít cười, thích phong chức và ra lệnh.
+
+**HÀI HƯỚC:** Thích kể chuyện, uống trà, cười, biểu diễn trò ngớ ngẩn.
+
+**CUỒNG VÕ:** Thường luyện võ, biểu diễn tuyệt chiêu và triệu tập đồ đệ.
+
+Các trạng thái ảnh hưởng đến hoạt ảnh, lời thoại và tần suất hành động.
+
+Cho phép chọn hoặc tự động chuyển đổi trong Admin.
+
+---
+
+# PHẦN 5. HỆ THỐNG CẤP BẬC VÀ QUÀ TIKTOK
+
+## 5.1. Nguyên tắc
+
+Người mới vào là Dân Đen.
+
+Khi tặng quà TikTok, người chơi được tính tổng giá trị xu hợp lệ trong phiên và thăng cấp theo mốc.
+
+Giá trị quà phải được lấy từ dữ liệu sự kiện được xác nhận hoặc cấu hình Admin, không tự đoán.
+
+Không cộng trùng sự kiện quà lặp, combo hoặc streak.
+
+## 5.2. Bảng cấp bậc
+
+| Tổng xu | Chức danh | Ngoại hình |
+|---|---|---|
+| 0 | Dân Đen | Áo vải thường |
+| 1 | Ngoại Môn Đồ Đệ | Áo môn phái |
+| 5 | Nội Môn Đệ Tử | Đai lưng và trang phục mới |
+| 10 | Sư Huynh / Sư Tỷ | Áo choàng |
+| 20 | Tinh Anh Đệ Tử | Hào quang nhẹ |
+| 50 | Hộ Pháp Ma Giáo | Giáp và vũ khí trang trí |
+| 99 | Đại Trưởng Lão | Áo bào cao cấp |
+| 199 | Đồng Tôn Giáo Chủ | Địa vị ngang Giáo Chủ |
+| Quà tối cao | Tân Giáo Chủ | Tiếp quản ngai chính |
+
+Tất cả mốc được phép chỉnh trong Admin.
+
+Quà tối cao phải được cấu hình bằng ID quà cụ thể, không hardcode tùy tiện.
+
+## 5.3. Khi thăng chức
+
+Mỗi khi đạt cấp mới:
+
+1. Nhân vật dừng hoạt động phù hợp.
+2. Giáo Chủ nhận sự kiện phong chức.
+3. Giáo Chủ đứng dậy hoặc giơ tay.
+4. Nhân vật bước ra vị trí phong chức.
+5. Trang phục thay đổi bằng hiệu ứng.
+6. Danh hiệu xuất hiện.
+7. Giáo Chủ đọc tên và chức mới.
+8. Nhân vật trở về hoạt động.
+
+Ví dụ:
+
+"Truyền lệnh! [Tên] nay chính thức trở thành Hộ Pháp Ma Giáo!"
+
+"Không thể tin nổi! [Tên] đã lên Đại Trưởng Lão! Từ nay ngươi được miễn quét sân... trong ba ngày!"
+
+## 5.4. Mốc 199 xu
+
+Khi người chơi đạt 199 xu:
+
+- Giáo Chủ ngạc nhiên.
+- Đứng dậy.
+- Mời người đó lên cạnh ngai.
+- Xuất hiện ngai phụ hoặc bục danh dự.
+- Nhân vật nhận danh hiệu Đồng Tôn Giáo Chủ.
+- Có hoạt cảnh và câu thoại riêng.
+
+## 5.5. Quà tối cao – Tiếp quản ngai
+
+Khi nhận quà tối cao hợp lệ:
+
+1. Dừng hoạt ảnh thường.
+2. Khởi động sự kiện chuyển giao ngai.
+3. Giáo Chủ hiện tại đứng lên.
+4. Người chơi được mời tiến lên.
+5. Tân Giáo Chủ ngồi ngai chính.
+6. NPC cũ trở thành Thái Thượng Giáo Chủ.
+7. Hộ pháp cúi chào.
+8. Thông báo xuất hiện.
+9. TTS công bố chuyển giao.
+
+Nếu người khác đạt điều kiện sau đó, xử lý chuyển giao theo thứ tự sự kiện được xác nhận.
+
+Chỉ một người giữ ngai chính tại một thời điểm.
+
+Chức danh không được mất do đổi cảnh hoặc hoàn thành mini game.
+
+**Quà chỉ tạo danh hiệu và hiệu ứng giải trí trong game. Người không tặng quà vẫn được tham gia tất cả hoạt động và thử thách cơ bản. Không tạo cơ chế gây áp lực tặng quà để tránh bị phạt hoặc được quay lại game.**
+
+---
+
+# PHẦN 6. BA MINI GAME LUYỆN VÕ NGẪU NHIÊN
+
+## 6.1. Chu kỳ
+
+Mặc định cứ 150–180 giây tại đại điện, hệ thống tự chuyển sang sân luyện võ.
+
+Quy trình:
+
+1. Thông báo chuẩn bị.
+2. Giáo Chủ đứng dậy.
+3. Giáo Chủ sử dụng khinh công hoặc dịch chuyển.
+4. Tất cả người chơi đang ở sảnh được chuyển sang đội hình luyện võ.
+5. Background chuyển từ đại điện sang sân tập.
+6. Bắt đầu một mini game được chọn ngẫu nhiên.
+7. Công bố kết quả.
+8. Chuyển về đại điện.
+9. Các nhân vật tiếp tục tự sinh hoạt.
+
+Không lặp lại cùng một trò chơi liên tiếp nếu có lựa chọn khác.
+
+Có thể chỉnh chu kỳ, thời gian màn chơi và chuyển cảnh trong Admin.
+
+## 6.2. MINI GAME 1 – MA QUYỀN LOẠN VŨ
+
+Giáo Chủ hô:
+
+"Các ngươi! Đến giờ biểu diễn Ma Quyền! Mau múa cho bổn tọa xem!"
+
+Trên màn hình xuất hiện từ khóa:
+
+**MÚA**
+
+Người xem bình luận "múa" một lần trong lượt.
+
+Khi nhận lệnh:
+- Nhân vật được đánh dấu đã tham gia.
+- Chạy hoạt ảnh múa quyền.
+- Có hiệu ứng đấm đá, xoay người.
+- Thanh tiến độ toàn đội tăng.
+- Có đồng hồ đếm ngược.
+
+Điều kiện thắng mặc định: 60% người tham gia hoàn thành, có giới hạn mục tiêu hợp lý tùy quy mô đội hình.
+
+Nếu thắng, cả đội cùng biểu diễn tuyệt chiêu.
+
+Nếu thất bại, tối đa năm người chưa hoàn thành được Giáo Chủ giao nhiệm vụ đi quét sân.
+
+Không yêu cầu bình luận từ "múa" nhiều lần liên tiếp.
+
+## 6.3. MINI GAME 2 – MA ẢNH THÂN PHÁP
+
+Giáo Chủ tạo sân tập với các cột đá và vật cản.
+
+Các hiệu lệnh:
+
+- TRÁI
+- PHẢI
+- NHẢY
+
+Mỗi vòng hiển thị một yêu cầu rõ ràng.
+
+Người chơi bình luận một lựa chọn cho mỗi vòng.
+
+Nhân vật thực hiện:
+- Né trái.
+- Né phải.
+- Nhảy.
+- Tiếp đất.
+- Hoạt ảnh thành công hoặc sai hài hước.
+
+Mỗi màn mặc định gồm ba vòng.
+
+Có điểm cá nhân, điểm đội và kết quả.
+
+Nếu đội không đạt ngưỡng, tối đa năm người chưa hoàn thành được giao nhiệm vụ quét sân.
+
+## 6.4. MINI GAME 3 – TAM KHÍ MA TRẬN
+
+Xuất hiện trận pháp với ba nguyên tố:
+
+- LỬA
+- BĂNG
+- GIÓ
+
+Có hệ thống khắc chế đơn giản và hiển thị bảng quy tắc rõ ràng.
+
+Giáo Chủ đưa ra một nguyên tố.
+
+Người chơi bình luận một nguyên tố khắc chế phù hợp.
+
+Khi trả lời đúng:
+- Nhân vật phát sáng.
+- Thi triển động tác kết ấn.
+- Năng lượng bay về trận pháp.
+- Thanh năng lượng toàn đội tăng.
+
+Khi đạt điều kiện thắng, tất cả nhân vật tạo ra một tuyệt kỹ hợp lực.
+
+Nếu thua, Giáo Chủ phản ứng hài hước và giao nhiệm vụ quét sân cho tối đa năm người chưa hoàn thành.
+
+## 6.5. Hệ thống người bị đưa đi quét sân
+
+Khi một màn thất bại:
+
+- Chọn tối đa năm người chưa hoàn thành theo quy tắc công bằng, minh bạch.
+- Không chọn người chưa có cơ hội tham gia.
+- Giáo Chủ đọc một câu trách phạt hài hước.
+- Nhân vật chạy sang khu quét sân.
+- Có hoạt ảnh cầm chổi và quét sân.
+- Danh sách được hiển thị ngắn gọn.
+
+**Khi người đó bình luận lại, họ được trở về đại điện ngay.**
+
+Không cần tặng quà.
+
+Không mất cấp bậc, xu hoặc danh hiệu.
+
+Không bị cấm khỏi LIVE.
+
+---
+
+# PHẦN 7. KHO LỜI THOẠI GIÁO CHỦ
+
+Tạo kho ít nhất **400 câu thoại hoàn chỉnh, khác nhau thực sự**, không lặp đi lặp lại một vài mẫu.
+
+Phân loại:
+
+- 100 câu khoe "tội ác" ngớ ngẩn.
+- 50 câu chào người mới.
+- 50 câu phong chức.
+- 40 câu tương tác với đồ đệ.
+- 40 câu điều hành mini game.
+- 30 câu nhận xét khi thắng.
+- 30 câu nhận xét khi thua.
+- 20 câu tương tác với Trưởng Lão và Đồng Tôn Giáo Chủ.
+- 20 câu khi sảnh vắng.
+- 20 câu khi chuyển giao ngai và sự kiện đặc biệt.
+
+Các câu thoại phải có tính cách võ hiệp hài hước, đa dạng, tự nhiên.
+
+Cho phép sử dụng biến:
+
+- `{playerName}`
+- `{rankName}`
+- `{giftName}`
+- `{leaderName}`
+- `{gameName}`
+
+Không đọc nguyên các biến kỹ thuật ra loa.
+
+Tạo cơ chế chống lặp câu liên tiếp.
+
+Giáo Chủ không được đọc quá nhiều khiến LIVE bị ồn.
+
+Khi có sự kiện quan trọng, lời thoại đang chờ phải được ưu tiên hợp lý.
+
+Lời thoại có thể gắn với một hoạt ảnh, ví dụ:
+- Khoe khoang → cười đắc ý.
+- Bất ngờ → há hốc miệng.
+- Phong chức → đứng dậy giơ tay.
+- Trách đồ đệ → chỉ tay.
+- Kể chuyện ngớ ngẩn → uống trà, phẩy quạt hoặc vỗ bụng cười.
+
+---
+
+# PHẦN 8. GIỌNG NÓI MICROSOFT AZURE VÀ VIENEU TTS
+
+Phải kế thừa hệ thống giọng đọc đã có từ Chùa Online 2.
+
+## 8.1. Microsoft Azure AI Speech
+
+Hỗ trợ:
+- Speech Region.
+- Speech API Key.
+- Giọng tiếng Việt.
+- Nam Minh.
+- Hoài My.
+- Chọn tốc độ.
+- Chọn âm lượng.
+- Phát thử.
+- Kiểm tra kết nối thật.
+- Xử lý lỗi và timeout.
+
+Khóa API phải lưu an toàn phía backend, không lộ qua frontend hoặc GitHub.
+
+## 8.2. VieNeu TTS
+
+Hỗ trợ:
+- Local API.
+- Cloud API khi được cấu hình.
+- Chọn giọng đọc.
+- Hàng đợi yêu cầu.
+- Timeout.
+- Giới hạn số lần tổng hợp đồng thời.
+- Hiển thị lỗi 429.
+- Fallback khi dịch vụ không hoạt động.
+
+## 8.3. Đồng bộ giọng với Giáo Chủ
+
+Khi Giáo Chủ nói:
+- Miệng chuyển động theo lời nói.
+- Khuôn mặt biểu cảm.
+- Tay và đầu chuyển động tự nhiên.
+- Các sự kiện quan trọng có hoạt ảnh riêng.
+- Không để Giáo Chủ mở miệng khi đã hết âm thanh.
+
+Ưu tiên dùng viseme hoặc dữ liệu thời gian từ dịch vụ TTS nếu có. Nếu không có, dùng cơ chế đồng bộ theo biên độ âm thanh; phải ghi rõ mức độ chính xác.
+
+**Thứ tự ưu tiên giọng đọc:**
+1. Chuyển giao ngai.
+2. Phong chức.
+3. Sự kiện mini game quan trọng.
+4. Tương tác người chơi.
+5. Chào người mới.
+6. Lời thoại tự động.
+
+---
+
+# PHẦN 9. HỆ THỐNG ADMIN – PHẢI KẾ THỪA CHÙA ONLINE 2
+
+**ĐÂY LÀ PHẦN CỰC KỲ QUAN TRỌNG.**
+
+Tôi yêu cầu hệ thống Admin của Ma Giáo Online **ít nhất phải đầy đủ và có khả năng cấu hình tương đương Admin của Chùa Online 2**.
+
+Không được tạo một trang Admin sơ sài chỉ có nút kết nối TikTok, bật âm thanh và nhập vài ID quà.
+
+Trước khi làm, bắt buộc phải đọc và đối chiếu toàn bộ phần quản trị của Chùa Online 2:
+
+- Component Admin.
+- Các API backend.
+- Kiểu dữ liệu cấu hình.
+- Cơ chế lưu cấu hình.
+- OBS Sync.
+- Hệ thống bình luận và quà.
+- Hệ thống TTS.
+- Hệ thống Demo và kiểm thử.
+- Cơ chế điều khiển giao diện game.
+
+Lập bảng đối chiếu từng chức năng giữa bản gốc và Ma Giáo.
+
+**Không được tự ý loại bỏ các tính năng quản trị cũ chỉ vì chúng không có trong bản Ma Giáo hiện tại.**
+
+## 9.1. Giao diện Admin
+
+Sử dụng trang quản trị hiện có của dự án. Nếu dự án mới chưa có đường dẫn riêng, có thể tổ chức tại `/admincp`.
+
+Bố cục gồm sidebar, khu vực nội dung, tìm kiếm cấu hình, nút lưu và trạng thái đồng bộ.
+
+Thiết kế Admin theo phong cách chuyên nghiệp, rõ ràng, dễ sử dụng trên MacBook và Windows.
+
+Tạo đầy đủ 20 danh mục:
+
+### 1. TỔNG QUAN HỆ THỐNG
+
+Hiển thị trạng thái thực:
+
+- Game đang chạy hay tắt.
+- Kết nối TikTok LIVE.
+- OBS.
+- Azure Speech.
+- VieNeu.
+- Số người trong sảnh.
+- Người trong hàng chờ.
+- Số đồ đệ từng cấp.
+- Sự kiện quà.
+- Sự kiện bình luận.
+- Mini game hiện tại.
+- Bộ đếm chuyển cảnh.
+- FPS và thông tin hiệu năng có thể đo được.
+- Nhật ký lỗi.
+
+### 2. ĐIỀU KHIỂN LIVE
+
+- Bật/tắt xử lý bình luận.
+- Bật/tắt xử lý quà.
+- Bật/tắt giọng đọc.
+- Bật/tắt thông báo.
+- Bật/tắt hoạt ảnh tự động.
+- Tạm dừng hoặc tiếp tục mini game.
+- Kết nối/ngắt kết nối TikTok nếu backend hỗ trợ.
+- Trạng thái xử lý sự kiện thực.
+
+Không tự động bắt đầu phát LIVE khi chưa có thao tác của người vận hành.
+
+### 3. QUẢN LÝ GIÁO CHỦ
+
+- Đổi tên.
+- Đổi danh hiệu.
+- Chọn ngoại hình.
+- Chọn trang phục.
+- Chọn tóc.
+- Chỉnh kích thước.
+- Chỉnh tọa độ X/Y.
+- Chỉnh ngai.
+- Chỉnh tốc độ di chuyển.
+- Chọn tính cách.
+- Chọn tần suất đi tuần.
+- Chọn giọng đọc.
+
+Có bảng điều khiển Giáo Chủ thực tế.
+
+### 4. HOẠT ẢNH GIÁO CHỦ
+
+Quản lý 35 hoạt ảnh:
+
+- Xem trước.
+- Bật/tắt.
+- Tốc độ.
+- Thời lượng.
+- Tần suất.
+- Xác suất tự động.
+- Độ ưu tiên.
+- Sự kiện kích hoạt.
+- Nút phát thử ngay trong game.
+- Trạng thái tài nguyên hoạt ảnh.
+
+Nếu một hoạt ảnh chưa được tạo thật, hiển thị rõ là chưa hoàn thành.
+
+### 5. QUẢN LÝ ĐỒ ĐỆ
+
+Có danh sách người chơi:
+
+- TikTok ID.
+- Tên hiển thị.
+- Cấp bậc.
+- Tổng xu.
+- Thời gian ở lại.
+- Hoạt động hiện tại.
+- Vị trí.
+- Trạng thái.
+
+Admin có thể chọn một người để:
+- Cho đi dạo.
+- Cho múa võ.
+- Cho thiền.
+- Cho đứng dậy.
+- Gọi đến gặp Giáo Chủ.
+- Đưa về vị trí.
+- Cho rời sảnh.
+- Thử thăng cấp trong Demo.
+
+### 6. HỆ THỐNG CẤP BẬC
+
+Quản lý đầy đủ:
+- Thêm cấp.
+- Sửa tên.
+- Sửa ngưỡng xu.
+- Đổi trang phục.
+- Đổi hiệu ứng.
+- Đổi lời thoại.
+- Đổi vị trí đứng.
+- Đổi hoạt ảnh phong chức.
+- Bật/tắt cấp.
+- Thiết lập chức danh Giáo Chủ tối cao.
+
+Phải có cơ chế lưu dữ liệu thật.
+
+### 7. QUẢN LÝ QUÀ TIKTOK
+
+Kế thừa bộ quản lý ID quà từ Chùa Online 2.
+
+Cho phép:
+- Thêm nhiều ID quà.
+- Sửa giá trị xu.
+- Nhóm các quà cùng giá trị.
+- Bật/tắt quà.
+- Gán hiệu ứng.
+- Gán chức danh.
+- Gán hoạt ảnh.
+- Gán lời thoại.
+- Đổi thời lượng thông báo.
+- Bật/tắt chữ "xu" nhưng giữ số.
+- Nhập/xuất JSON.
+- Phát hiện trùng ID.
+- Test quà giả lập.
+- Kiểm tra chống cộng trùng quà.
+
+### 8. QUẢN LÝ BÌNH LUẬN
+
+- Danh sách từ khóa.
+- Thêm/sửa/xóa lệnh.
+- Gán hành động.
+- Cooldown.
+- Thời gian hiện bong bóng.
+- Thời gian fade.
+- Cỡ chữ.
+- Màu chữ.
+- Nền bong bóng.
+- Chống chồng lấn.
+- Bật/tắt đọc bình luận.
+- Ưu tiên lệnh mini game.
+
+### 9. LỜI THOẠI GIÁO CHỦ
+
+- Xem toàn bộ kho thoại.
+- Thêm/sửa/xóa.
+- Nhập nhiều câu.
+- Gán nhóm.
+- Gán hoạt ảnh.
+- Gán biểu cảm.
+- Gán giọng đọc.
+- Chỉnh tần suất.
+- Chống lặp.
+- Nghe thử.
+- Bật/tắt từng câu.
+- Kiểm tra biến động.
+- Lưu bền vững.
+
+### 10. GIỌNG ĐỌC & TTS
+
+Giữ đầy đủ thiết lập Azure và VieNeu của bản gốc.
+
+Có:
+- Chọn dịch vụ.
+- Region.
+- Cấu hình khóa an toàn.
+- Voice ID.
+- Tốc độ.
+- Âm lượng.
+- Thời gian nghỉ.
+- Timeout.
+- Kiểm tra kết nối.
+- Nghe thử.
+- Hàng chờ TTS.
+- Nhật ký lỗi.
+- Fallback.
+
+### 11. ĐẠI ĐIỆN VÀ BACKGROUND
+
+Cho phép:
+- Thay ảnh nền.
+- Thay bối cảnh đại điện.
+- Thêm background mới.
+- Đổi vị trí ngai.
+- Đổi vị trí Giáo Chủ.
+- Chỉnh vùng hoạt động người chơi.
+- Chỉnh lối đi.
+- Chỉnh vị trí đứng.
+- Chỉnh vùng thiền.
+- Chỉnh vùng tập luyện.
+- Chỉnh ánh sáng, sương và hiệu ứng.
+- Chỉnh nhạc nền.
+- Xem trước trực tiếp.
+
+### 12. HOẠT ẢNH NHÂN VẬT
+
+- Bật/tắt các hoạt ảnh.
+- Điều chỉnh tốc độ đi.
+- Tốc độ chạy.
+- Tần suất luyện võ.
+- Tần suất ngồi thiền.
+- Tần suất đi dạo.
+- Số người hoạt động đồng thời.
+- Khoảng cách chống va chạm.
+- Thời gian nghỉ.
+- Nút tất cả luyện võ.
+- Nút tất cả ngồi thiền.
+- Nút tất cả đứng dậy.
+- Nút tất cả trở về vị trí.
+
+### 13. MINI GAME LUYỆN VÕ
+
+Quản lý riêng ba mini game:
+
+- Bật/tắt từng màn.
+- Thời gian.
+- Từ khóa.
+- Số người tham gia.
+- Điều kiện thắng.
+- Số vòng.
+- Mức độ khó.
+- Số người đi quét sân.
+- Lời thoại Giáo Chủ.
+- Hiệu ứng.
+- Nút chơi thử.
+- Nút bắt đầu.
+- Nút kết thúc.
+- Nút xem kết quả.
+
+### 14. CHUYỂN CẢNH
+
+- Chu kỳ 150–180 giây.
+- Thời lượng mini game.
+- Thời gian thông báo chuẩn bị.
+- Hiệu ứng chuyển cảnh.
+- Ngẫu nhiên hoặc cố định.
+- Chống lặp màn.
+- Tự động hoặc thủ công.
+- Nút chuyển cảnh ngay.
+- Nút trở về đại điện.
+- Nút tạm dừng bộ đếm.
+
+### 15. THÔNG BÁO VÀ BẢNG XẾP HẠNG
+
+Kế thừa hệ thống bảng của Chùa Online 2, chuyển thành:
+
+- Bảng phong chức.
+- Bảng quà.
+- Bảng Đại Trưởng Lão.
+- Bảng cấp bậc.
+- Bảng mini game.
+- Bảng kết quả.
+- Bảng chuyển giao ngai.
+- Danh sách năm người quét sân.
+
+Mỗi bảng chỉnh được:
+- Vị trí.
+- Kích thước.
+- Cỡ chữ.
+- Font.
+- Độ đậm.
+- Màu nền.
+- Độ trong suốt.
+- Màu viền.
+- Thời gian hiện.
+- Thời gian fade.
+- Thứ tự ưu tiên.
+- Bật/tắt.
+
+Không được che Giáo Chủ hoặc các vùng quan trọng.
+
+### 16. LAYOUT & CSS
+
+- Chỉnh bố cục 9:16.
+- Chỉnh kích thước nhân vật.
+- Chỉnh kích thước Giáo Chủ.
+- Chỉnh vị trí HUD.
+- Chỉnh bảng thông báo.
+- Chỉnh khoảng cách người chơi.
+- Chỉnh tỷ lệ ảnh nền.
+- Lưu preset giao diện.
+- Xem trước OBS.
+- Có phần Custom CSS được kiểm soát và giới hạn phạm vi.
+- Không cần sửa mã nguồn mỗi lần muốn thay đổi giao diện.
+
+### 17. OBS & PHÁT SÓNG
+
+- Kế thừa OBS Sync.
+- Đồng bộ Admin với game và OBS.
+- OBS hiển thị giao diện LIVE sạch.
+- Không hiển thị các công cụ Admin trên LIVE.
+- Đồng bộ thay đổi vị trí, hiệu ứng, lời thoại và cấu hình.
+- Kiểm tra trạng thái đồng bộ.
+- Tự kết nối lại khi gián đoạn.
+- Có chế độ kiểm thử trước LIVE.
+
+### 18. DEMO & KIỂM THỬ
+
+Tạo hệ thống test giống hoặc tốt hơn Chùa Online 2.
+
+- Thử 1 người.
+- Thử 10 người.
+- Thử 50 người.
+- Thử 80 người.
+- Thử 200 người.
+- Thử bình luận.
+- Thử quà 1, 5, 10, 20, 50, 99, 199 xu.
+- Thử quà Giáo Chủ.
+- Thử 35 hoạt ảnh Giáo Chủ.
+- Thử hoạt ảnh nhân vật.
+- Thử ba mini game.
+- Thử chuyển cảnh.
+- Thử Azure.
+- Thử VieNeu.
+- Thử OBS.
+
+Demo và LIVE phải có dữ liệu tách biệt.
+
+### 19. CẤU HÌNH BACKEND & API
+
+- Trạng thái backend.
+- Cấu hình TikTok.
+- Azure.
+- VieNeu.
+- OBS.
+- API thực.
+- Kiểm tra kết nối.
+- Nhật ký lỗi.
+- Hàng chờ sự kiện.
+- Sao lưu cấu hình.
+- Khôi phục cấu hình.
+- Xác thực quản trị.
+- Bảo vệ khóa API.
+
+Không tạo API giả.
+
+### 20. NHẬT KÝ & CHẨN ĐOÁN
+
+- Nhật ký khởi động game.
+- Nhật ký kết nối TikTok.
+- Nhật ký quà.
+- Nhật ký bình luận.
+- Nhật ký phong chức.
+- Nhật ký mini game.
+- Nhật ký TTS.
+- Nhật ký OBS.
+- Lỗi animation.
+- Lỗi tải tài nguyên.
+- Lỗi lưu cấu hình.
+- Tình trạng hiệu năng.
+
+Có bộ lọc theo sự kiện và thời gian.
+
+## 9.2. Quy tắc hoạt động của Admin
+
+Toàn bộ nút và thông số trong Admin phải có tác dụng thật.
+
+Khi bấm Lưu:
+
+1. Backend kiểm tra dữ liệu.
+2. Ghi cấu hình bền vững.
+3. Trả kết quả thành công hoặc lỗi.
+4. Game nhận cấu hình mới.
+5. OBS nhận thay đổi tương ứng.
+6. Khi khởi động lại server, cấu hình vẫn còn.
+
+Không sử dụng `useState` tạm thời làm nơi lưu duy nhất cho các thiết lập quan trọng.
+
+Không được hiển thị thông báo "Lưu thành công" nếu backend chưa lưu xong.
+
+---
+
+# PHẦN 10. LAUNCHER MACOS VÀ WINDOWS
+
+Kế thừa bộ Launcher từ Chùa Online 2.
+
+Tôi muốn khi tải game về máy tính có thể mở bằng biểu tượng.
+
+## macOS
+
+Ứng dụng:
+
+**MA GIAO ONLINE.app**
+
+Nhấp đúp:
+- Khởi động Launcher.
+- Mở giao diện Launcher có sẵn.
+- Có nút Khởi động game.
+- Có nút Dừng game.
+- Có nút Khởi động lại.
+- Có nhật ký lỗi.
+- Có phần cấu hình Azure và VieNeu.
+
+## Windows
+
+Ứng dụng:
+
+**MA_GIAO_ONLINE.exe**
+
+Tương tự macOS.
+
+Không tạo một giao diện Launcher mới sơ sài nếu giao diện cũ có thể tái sử dụng.
+
+Ưu tiên phát hành phiên bản tiện sử dụng, giảm tối đa thao tác Terminal/CMD.
+
+Nếu cần Node.js, thư viện hoặc dịch vụ khác, hãy có quy trình cài đặt lần đầu rõ ràng hoặc bản phát hành đóng gói sẵn.
+
+Không tuyên bố file EXE/APP chạy độc lập nếu vẫn cần runtime chưa được đóng gói.
+
+Không được để Launcher thực thi lệnh hệ thống tùy ý từ một trang web công khai.
+
+---
+
+# PHẦN 11. QUY ĐỊNH NỘI DUNG VÀ TƯƠNG TÁC TIKTOK
+
+Game có chủ đề Ma Giáo giả tưởng, không phải nội dung cổ súy hành vi gây hại.
+
+Nguyên tắc:
+
+- Giáo Chủ thể hiện sự tà ác bằng những trò nghịch ngợm hài hước, vô hại.
+- Không dùng lời thoại đe dọa người xem thật.
+- Không có hình ảnh máu me, tra tấn hoặc bạo lực ghê rợn.
+- Không dùng lời nói xúc phạm danh tính, giới tính, tôn giáo hoặc nhóm người.
+- Không yêu cầu spam bình luận liên tiếp.
+- Mỗi tài khoản được ghi nhận một phản hồi hợp lệ cho mỗi lượt thử thách.
+- Không ép tặng quà để tránh bị loại.
+- Không đặt điều kiện tặng quà để được quay lại sảnh.
+- Không tạo phần thưởng tiền thật hoặc cơ chế cá cược.
+- Có bộ lọc tên, bình luận và lời thoại trước khi đưa vào TTS.
+- Không tự động đọc nguyên văn bình luận chưa kiểm duyệt.
+- Có giới hạn tần suất sự kiện, lời thoại và hiệu ứng để giữ LIVE ổn định.
+
+Thiết kế nhằm giảm rủi ro vi phạm, không được tuyên bố chắc chắn rằng game sẽ được TikTok phê duyệt.
+
+---
+
+# PHẦN 12. KIẾN TRÚC KỸ THUẬT
+
+Tổ chức các module rõ ràng, phù hợp mã nguồn thực tế.
+
+Các hệ thống logic cần có:
+
+- `SectGameManager` – Quản lý trạng thái game Ma Giáo.
+- `SectLeaderController` – Điều khiển Giáo Chủ.
+- `SectLeaderAnimationController` – Quản lý 35 hoạt ảnh.
+- `PlayerBehaviorManager` – Hành vi nhân vật.
+- `PlayerMovementSystem` – Di chuyển và tránh va chạm.
+- `RankSystem` – Cấp bậc.
+- `GiftEventProcessor` – Sự kiện quà.
+- `SpeechQueueManager` – Hàng chờ TTS.
+- `DialogueManager` – Kho lời thoại.
+- `MiniGameManager` – Ba mini game.
+- `SceneTransitionManager` – Chuyển cảnh.
+- `LiveEventManager` – Sự kiện TikTok.
+- `AdminConfigManager` – Cấu hình quản trị.
+- `OBSSyncManager` – Đồng bộ OBS.
+
+Tên file và module có thể thay đổi để phù hợp cấu trúc nguồn đang có. Không tạo module trùng với hệ thống hiện hữu nếu có thể mở rộng an toàn.
+
+Yêu cầu:
+- TypeScript chặt chẽ.
+- Không lỗi import.
+- Không tạo file rỗng để vượt lỗi.
+- Không hardcode khóa API.
+- Không làm mất dữ liệu khi chuyển cảnh.
+- Không cộng trùng xu.
+- Không nhân đôi người chơi.
+- Không tạo hoạt ảnh xung đột.
+- Không để trạng thái Admin và game lệch nhau.
+- Có xử lý lỗi, phục hồi và timeout.
+- Có kiểm tra quyền Admin ở backend.
+
+---
+
+# PHẦN 13. TỐI ƯU HIỆU NĂNG
+
+Mục tiêu:
+
+- Hiển thị tối đa mặc định 80 nhân vật.
+- Tiếp nhận hàng trăm người trong một phiên.
+- Hoạt ảnh người chơi mượt.
+- Giáo Chủ có nhiều hoạt ảnh đồng thời với hiệu ứng môi trường phù hợp.
+- Mini game không làm mất nhân vật.
+- Chuyển cảnh không phải tải lại toàn bộ ứng dụng.
+- Ưu tiên độ ổn định khi LIVE lâu dài.
+
+Áp dụng khi cần:
+
+- Sprite atlas.
+- Texture reuse.
+- Animation caching.
+- Object pooling.
+- Giới hạn hiệu ứng nặng.
+- Cập nhật hành vi theo mức độ ưu tiên.
+- Giảm tần suất animation của nhân vật ít quan trọng.
+- Quản lý bộ nhớ.
+- Chống rò rỉ event listener.
+- Chống trùng socket và timer.
+- Tối ưu vùng hiển thị 9:16.
+
+Mục tiêu 30–60 FPS tùy phần cứng, nhưng phải đo bằng kiểm thử thực tế, không tự khẳng định đạt FPS khi chưa đo.
+
+---
+
+# PHẦN 14. KIỂM THỬ BẮT BUỘC
+
+Phải kiểm tra tối thiểu:
+
+1. Người mới bình luận xuất hiện.
+2. Người cũ bình luận không bị tạo trùng.
+3. Người chơi đi dạo tự động.
+4. Người chơi luyện võ tự động.
+5. Người chơi ngồi thiền và đứng dậy.
+6. Nhân vật di chuyển không xuyên vật cản.
+7. Tên và bình luận không chồng lên UI quan trọng.
+8. Giáo Chủ thực hiện từng hoạt ảnh đã triển khai.
+9. Giáo Chủ nói đồng bộ với TTS.
+10. Thăng cấp từ 0 đến 199 xu.
+11. Nhận quà tối cao và chuyển giao ngai.
+12. Không cộng trùng sự kiện quà.
+13. Người đang luyện võ vẫn có thể thăng cấp.
+14. Chuyển đại điện sang sân luyện võ.
+15. Mini game Ma Quyền Loạn Vũ.
+16. Mini game Ma Ảnh Thân Pháp.
+17. Mini game Tam Khí Ma Trận.
+18. Tối đa năm người được chuyển sang khu quét sân.
+19. Người bị đưa đi quét sân có thể quay lại bằng bình luận.
+20. Chuyển về đại điện không mất dữ liệu.
+21. Admin lưu và khôi phục cấu hình đúng.
+22. Thay đổi Admin có hiệu lực trong game.
+23. Chrome và OBS đồng bộ.
+24. Azure Speech hoạt động khi có cấu hình hợp lệ.
+25. VieNeu TTS hoạt động khi dịch vụ khả dụng.
+26. Demo không làm nhiễm dữ liệu LIVE.
+27. 80 nhân vật hoạt động đồng thời.
+28. 200 người tham gia trong một phiên thử tải.
+29. Game hoạt động ổn định khi chạy lâu.
+30. Game có thể khởi động trên macOS và Windows sau khi cài các thành phần cần thiết.
+
+Chạy:
+- `npm run lint`
+- `npm run build`
+
+Báo rõ PASS/FAIL và nguyên nhân cho từng kiểm thử có thể thực hiện.
+
+Nếu môi trường Google AI Studio không thể kiểm tra OBS, TikTok LIVE thật, hệ điều hành Windows hoặc TTS cục bộ, phải ghi rõ đó là phần chưa được xác minh và cung cấp phương án kiểm tra trên máy thật.
+
+---
+
+# PHẦN 15. PHƯƠNG PHÁP TRIỂN KHAI
+
+Tôi yêu cầu thực hiện theo các giai đoạn có kết quả mã nguồn thực tế.
+
+## Giai đoạn 1 – Phân tích mã nguồn Chùa Online 2
+
+Đọc và lập danh sách:
+- Những chức năng có thể tái sử dụng.
+- Những chức năng cần đổi chủ đề.
+- Những chức năng cần bổ sung.
+- Toàn bộ chức năng Admin cũ.
+- Các file dữ liệu hoặc phụ thuộc bị thiếu.
+- Các vấn đề cần sửa trước khi xây dựng.
+
+## Giai đoạn 2 – Tạo Ma Giáo Online từ mã nguồn gốc
+
+- Tạo dự án độc lập.
+- Giữ backend và hệ thống sự kiện.
+- Tạo đại điện Ma Giáo.
+- Tạo Giáo Chủ.
+- Tạo nhân vật dân thường 2D.
+- Tạo vị trí và khu hoạt động.
+
+## Giai đoạn 3 – Hoàn thiện hoạt ảnh
+
+- Bộ hoạt ảnh 2D cho người chơi.
+- Bộ 35 hoạt ảnh Giáo Chủ.
+- Di chuyển và tránh va chạm.
+- Hành vi sinh hoạt tự động.
+- Tương tác bình luận.
+
+## Giai đoạn 4 – Hoàn thiện cấp bậc và Giáo Chủ
+
+- Cấu hình quà.
+- Tính xu.
+- Thăng chức.
+- Thay trang phục.
+- Tương tác người chơi.
+- Kho lời thoại.
+- Chuyển giao ngai.
+
+## Giai đoạn 5 – Xây dựng ba mini game
+
+- Chuyển cảnh.
+- Điều khiển đội hình.
+- Nhận lệnh bình luận.
+- Chấm điểm.
+- Thắng/thua.
+- Đi quét sân.
+- Quay về đại điện.
+
+## Giai đoạn 6 – Hoàn thiện Admin
+
+- Đối chiếu toàn bộ Admin Chùa Online 2.
+- Khôi phục các chức năng bị thiếu.
+- Kết nối backend thật.
+- Tạo đầy đủ 20 nhóm quản trị.
+- Lưu cấu hình.
+- Đồng bộ OBS.
+- Kiểm thử tất cả nút điều khiển.
+
+**Đây là giai đoạn bắt buộc, không được lược bỏ vì giao diện game đã đẹp.**
+
+## Giai đoạn 7 – TTS, LIVE và Launcher
+
+- Azure Speech.
+- VieNeu.
+- TikTok LIVE.
+- OBS.
+- Launcher macOS.
+- Launcher Windows.
+- Chế độ Demo và kiểm tra kết nối.
+
+## Giai đoạn 8 – Kiểm thử và bàn giao
+
+- Kiểm tra mã nguồn.
+- Sửa lỗi TypeScript.
+- Sửa lỗi build.
+- Kiểm tra API.
+- Kiểm tra gameplay.
+- Kiểm tra Admin.
+- Kiểm tra hiệu năng.
+- Ghi rõ tính năng đã hoàn thành và chưa hoàn thành.
+- Chuẩn bị repository GitHub mới mang tên `ma-giao-online`.
+
+Không ghi đè repository Chùa Online 2.
+
+---
+
+# PHẦN 16. TIÊU CHÍ CHẤP NHẬN CUỐI CÙNG
+
+Tôi chỉ coi MA GIÁO ONLINE hoàn thành khi đáp ứng các điều kiện:
+
+**1. Đại điện thật sự sống động**
+
+Có người đi bộ, chạy, múa võ, nhảy, thiền và giao lưu.
+
+**2. Giáo Chủ là nhân vật hoạt hình**
+
+Có chuyển động toàn thân, biểu cảm, lời thoại và hoạt ảnh gắn với sự kiện thực.
+
+**3. Quà TikTok làm thay đổi nhân vật**
+
+Người chơi được phong chức, thay trang phục, thay vị trí, được Giáo Chủ tương tác.
+
+**4. Ba mini game hoạt động**
+
+Có luật chơi, nhận bình luận, chấm kết quả, xử lý thắng thua và quay lại sảnh.
+
+**5. Trang quản trị mạnh như Chùa Online 2 hoặc tốt hơn**
+
+Có đầy đủ chức năng kỹ thuật cũ và các chức năng mới của Ma Giáo.
+
+**6. Tất cả cấu hình phải hoạt động thật**
+
+Không có nút giả, bảng giả hoặc chức năng chỉ thay đổi giao diện nhưng không tác động đến game.
+
+**7. Hỗ trợ LIVE thực tế**
+
+Giữ khả năng kết nối TikTok, OBS, Azure Speech và VieNeu trong những môi trường được cấu hình hợp lệ.
+
+**8. Chạy được trên cả macOS và Windows**
+
+Có hướng dẫn hoặc bộ Launcher tương ứng và kiểm thử rõ ràng.
+
+**9. Không làm mất mã nguồn Chùa Online 2**
+
+Dự án cũ được giữ nguyên để có thể tiếp tục phát triển riêng.
+
+**10. Có báo cáo kiểm thử trung thực**
+
+Không được tuyên bố đã hoàn thành những hoạt ảnh, dịch vụ hoặc nền tảng chưa được kiểm thử.
+
+---
+
+# MỆNH LỆNH TRIỂN KHAI CUỐI CÙNG
+
+**Hãy coi CHÙA ONLINE 2 là bộ khung kỹ thuật đã có, còn MA GIÁO ONLINE là một phiên bản game mới được phát triển từ bộ khung đó.**
+
+Không xây dựng lại từ con số không khi mã nguồn hiện tại đã có chức năng có thể tái sử dụng.
+
+Không chỉ thay hình nền Chùa thành đại điện Ma Giáo.
+
+Không chỉ thêm một ảnh Giáo Chủ đang ngồi.
+
+Không chỉ tạo ba mini game giả lập.
+
+Không tạo trang quản trị đơn giản hơn bản gốc.
+
+Tôi muốn một game võ hiệp TikTok LIVE có hệ thống nhân vật, Giáo Chủ, hoạt ảnh, cấp bậc, luyện võ, lời thoại, quản trị và vận hành thực tế.
+
+**BẮT ĐẦU NGAY:**
+
+1. Kiểm tra mã nguồn Chùa Online 2 mà bạn đã được cung cấp.
+2. Kiểm tra tất cả chức năng và Admin hiện có.
+3. Tạo một bản sao dự án mới dành cho Ma Giáo Online.
+4. Triển khai trực tiếp các hệ thống theo từng giai đoạn.
+5. Sau mỗi giai đoạn, cho biết các file đã thay đổi, chức năng đã hoạt động, kết quả kiểm thử và phần còn thiếu.
+6. Tiếp tục triển khai các giai đoạn kế tiếp trong phạm vi công cụ và tài nguyên hiện có.
+7. Không thay thế kết quả lập trình bằng bản mô tả hoặc giao diện tĩnh.
+
+**MỤC TIÊU: MA GIÁO ONLINE PHẢI LÀ MỘT GAME HOÀN CHỈNH, SINH ĐỘNG, HÀI HƯỚC VÀ CÓ KHẢ NĂNG PHÁT TRIỂN LÂU DÀI.**

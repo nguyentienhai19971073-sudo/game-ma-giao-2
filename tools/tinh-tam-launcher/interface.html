@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>MA GIÁO ONLINE – Bảng Điều Khiển Khởi Động Nhanh</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #09060E;
+      color: #F5F5F4;
+      padding: 24px;
+    }
+    .card {
+      max-width: 820px;
+      margin: 0 auto;
+      background: #140D1F;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+    h1 {
+      margin: 0 0 6px;
+      color: #FBBF24;
+      font-size: 22px;
+      letter-spacing: 0.05em;
+    }
+    .sub {
+      color: #A8A29E;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button, a.btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(212, 175, 55, 0.45);
+      background: #991B1B;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    a.btn.gold {
+      background: #D97706;
+      color: #000;
+    }
+    pre {
+      background: #050308;
+      border: 1px solid #292524;
+      border-radius: 8px;
+      padding: 12px;
+      height: 260px;
+      overflow-y: auto;
+      font-size: 12px;
+      color: #E7E5E4;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🐉 MA GIÁO ONLINE – THIÊN HẠ ĐỆ NHẤT TÀ PHÁI</h1>
+    <div class="sub">Trình khởi động một chạm dành cho macOS (.app) & Windows (.exe)</div>
+
+    <div class="btns">
+      <button onclick="fetch('/api/start',{method:'POST'})">▶ Khởi Động Server Game</button>
+      <button onclick="fetch('/api/stop',{method:'POST'})" style="background:#44403C">⏹ Dừng Server</button>
+      <a class="btn gold" href="http://localhost:3000/" target="_blank">🏛️ Mở Game + Quản Trị</a>
+      <a class="btn" href="http://localhost:3000/admincp" target="_blank">⚙️ Mở /admincp (20 Mục)</a>
+      <a class="btn" href="http://localhost:3000/?obs=1" target="_blank">🎥 Mở Màn Hình OBS (?obs=1)</a>
+    </div>
+
+    <div style="font-size:12px;color:#FBBF24;margin-bottom:6px;">Nhật ký hoạt động:</div>
+    <pre id="logs">Đang tải trạng thái...</pre>
+  </div>
+  <script>
+    setInterval(async () => {
+      try {
+        const r = await fetch('/api/status');
+        const d = await r.json();
+        document.getElementById('logs').textContent = (d.logs || []).join('\n');
+      } catch {}
+    }, 1200);
+  </script>
+</body>
+</html>
