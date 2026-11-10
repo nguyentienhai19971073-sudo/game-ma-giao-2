@@ -99,6 +99,7 @@ export interface SectLeaderRuntimeState {
   isSpeaking: boolean;
   mouthOpenness: number;
   currentSpeechText?: string;
+  speechStartedAt?: number;
   x: number;
   y: number;
   targetX: number;
@@ -149,7 +150,24 @@ export type DiscipleFSMState =
   | 'meditate_corner'
   | 'minigame_active'
   | 'sweeping_penalty'
-  | 'return_from_sweep';
+  | 'return_from_sweep'
+  | 'departing_gate';
+
+export type StayDurationApplyMode = 'immediate' | 'new_only';
+
+export type DiscipleStayStatus = 'active' | 'expiring_soon' | 'departing';
+
+export interface DiscipleStayDurationConfig {
+  inactivityTimeoutMinutes: number; // 1–30 minutes (default: 7)
+  inactivityTimeoutSec: number; // default: 420s (supports short test values in Demo/Test mode)
+  autoDepartEnabled: boolean; // default: true
+  walkToGateOnDepart: boolean; // default: true
+  departAnimationDurationSec: number; // default: 4s (1–15s)
+  warningBeforeDepartEnabled: boolean; // default: true
+  warningBeforeDepartSec: number; // default: 30s
+  applyMode: StayDurationApplyMode; // 'immediate' | 'new_only'
+  isTestShortTimeout?: boolean;
+}
 
 export type HallZoneId =
   | 'throne_zone'
@@ -214,6 +232,13 @@ export interface SectDisciple {
   likeCount: number;
   joinedAt: number;
   lastActiveAt: number;
+  lastInteractionAt?: number;
+  assignedTimeoutSec?: number;
+  extraExtendedSec?: number;
+  departStartedAt?: number;
+  departDurationMs?: number;
+  stayStatus?: DiscipleStayStatus;
+  remainingStaySec?: number;
   lastCommandAt: number;
   lastComment?: string;
   commentBubbleExpiresAt?: number;
@@ -489,6 +514,7 @@ export interface MiniGameActiveState {
   leaderElement?: ElementType;
   expectedCounterCommand?: ElementType;
   isVictory?: boolean;
+  resultStartedAt?: number;
   sweepingPenaltyNames: string[];
 }
 
@@ -560,6 +586,10 @@ export interface OverlayConfig {
   sectLeaderScale: number;
   nameplateScale: number;
   bubbleScale: number;
+  panelBgOpacity: number;
+  popupDurationMs: number;
+  popupFadeOutMs: number;
+  autoHidePopups: boolean;
   showHeaderBanner: boolean;
   showElderLeaderboard: boolean;
   showGiftRankTable: boolean;
@@ -582,6 +612,7 @@ export interface MaGiaoMasterConfig {
   voiceConfig: VoiceSystemConfig;
   sceneConfig: SceneConfig;
   playerAnimationConfig: PlayerAnimationConfig;
+  stayDurationConfig: DiscipleStayDurationConfig;
   miniGames: MiniGameConfig[];
   sceneTransition: SceneTransitionConfig;
   noticePanels: NoticePanelConfig[];
@@ -594,6 +625,7 @@ export interface OBSSyncSettings {
   sceneConfig: SceneConfig;
   voiceConfig: VoiceSystemConfig;
   sectLeaderConfig: SectLeaderConfig;
+  stayDurationConfig?: DiscipleStayDurationConfig;
   updatedAt: number;
 }
 

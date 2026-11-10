@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { GameStateSnapshot } from '../../systems/SectGameManager';
 import {
   labelCollisionManager,
@@ -10,6 +10,10 @@ interface MaGiaoOverlayHUDProps {
   snapshot: GameStateSnapshot;
   isOBSMode?: boolean;
 }
+
+const CRISP_TEXT_SHADOW: React.CSSProperties = {
+  textShadow: '0 1px 3px rgba(0, 0, 0, 0.96), 0 0 6px rgba(0, 0, 0, 0.85)',
+};
 
 export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
   snapshot,
@@ -28,11 +32,45 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
   } = snapshot;
 
   const { overlayConfig, commentSettings, noticePanels } = config;
-  const now = Date.now();
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  // Smooth 50ms clock for 0.7s fade-out and 4.0s auto-unmount of temporary popups
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const now = Math.max(nowMs, Date.now());
+
+  // Background opacity (default 0.4) applied ONLY to rgba() background so text/icons stay 100% sharp
+  const panelBgOpacity = Math.max(0.05, Math.min(0.95, overlayConfig.panelBgOpacity ?? 0.4));
+  const popupDurationMs = Math.max(1000, overlayConfig.popupDurationMs || 4000);
+  const popupFadeOutMs = Math.min(
+    popupDurationMs - 200,
+    Math.max(100, overlayConfig.popupFadeOutMs || 700)
+  );
+  const autoHidePopups = overlayConfig.autoHidePopups !== false;
 
   const isPanelEnabled = (id: NoticePanelId): boolean => {
     const found = noticePanels.find(p => p.id === id);
     return found ? found.enabled : true;
+  };
+
+  const computePopupVisibility = (startedAt?: number): { visible: boolean; opacity: number } => {
+    if (!startedAt) return { visible: false, opacity: 0 };
+    if (!autoHidePopups) return { visible: true, opacity: 1 };
+    const elapsed = Math.max(0, now - startedAt);
+    if (elapsed >= popupDurationMs) {
+      return { visible: false, opacity: 0 };
+    }
+    const fadeStart = popupDurationMs - popupFadeOutMs;
+    if (elapsed >= fadeStart) {
+      const ratio = Math.max(0, Math.min(1, (popupDurationMs - elapsed) / popupFadeOutMs));
+      return { visible: true, opacity: Number(ratio.toFixed(3)) };
+    }
+    return { visible: true, opacity: 1 };
   };
 
   // Solve non-overlapping positions for 5-char nameplates (below feet) and comment bubbles (above head)
@@ -78,9 +116,38 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
   }, [disciples, commentSettings.showCommentBubble, commentSettings.maxConcurrentBubbles, now]);
 
   const latestPromotion = useMemo(() => {
-    const recent = promotions.find(p => now - p.timestamp < 7500);
-    return recent || null;
-  }, [promotions, now]);
+    if (promotions.length === 0) return null;
+    const candidate = promotions[0];
+    if (!candidate) return null;
+    if (autoHidePopups && now - candidate.timestamp >= popupDurationMs) {
+      return null;
+    }
+    return candidate;
+  }, [promotions, now, autoHidePopups, popupDurationMs]);
+
+  const promotionFade = computePopupVisibility(latestPromotion?.timestamp);
+  const speechFade = computePopupVisibility(
+    sectLeader.currentSpeechText ? sectLeader.speechStartedAt || sectLeader.animationStartedAt : undefined
+  );
+  const miniGameResultFade = computePopupVisibility(
+    miniGame.isActive && miniGame.phase === 'result'
+      ? miniGame.resultStartedAt || miniGame.startedAt
+      : undefined
+  );
+
+  // Synchronized Throne & Sweeping Courtyard HUD positions
+  const thronePos = config.sectLeader.thronePosition || { x: 50, y: 22.13 };
+  const leaderNameplateTopPct = Math.max(6.2, thronePos.y - 10.5); // ~11.63% (lowered by 30px from 8.5%)
+  const leaderSpeechTopPct = Math.min(44, thronePos.y + 7.4); // ~29.53% (below Throne steps, never covers Sect Leader's face)
+
+  const sweepZone = config.sceneConfig.zones?.sweeping_courtyard || {
+    xMin: 73,
+    xMax: 94,
+    yMin: 85.4,
+    yMax: 92.4,
+  };
+  // Raised by 25px (+2.6% from bottom: 6.5% -> 9.1%)
+  const sweepingPanelBottomPct = Math.max(6.5, Math.min(28, 100 - sweepZone.yMax + 1.5));
 
   // Live behavior distribution counter for transparency
   const behaviorStats = useMemo(() => {
@@ -113,14 +180,20 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
 
       {/* 1. TOP HEADER BAR: SECT TITLE, SCENE STATUS & MINI-GAME COUNTDOWN */}
       {overlayConfig.showHeaderBanner && (
-        <div className="magiao-hud-panel absolute top-1.5 left-2 right-2 z-20 flex items-center justify-between px-2.5 py-1 rounded-lg bg-black/80 border border-amber-500/45 shadow-lg backdrop-blur-sm">
+        <div
+          className="magiao-hud-panel absolute top-1.5 left-2 right-2 z-20 flex items-center justify-between px-2.5 py-1 rounded-lg border border-amber-500/55 shadow-lg"
+          style={{
+            backgroundColor: `rgba(10, 6, 18, ${Math.min(0.85, panelBgOpacity + 0.25)})`,
+            ...CRISP_TEXT_SHADOW,
+          }}
+        >
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
             <div className="truncate">
-              <div className="text-[10.5px] font-bold tracking-wider text-amber-400 uppercase font-['Cinzel']">
+              <div className="text-[10.5px] font-bold tracking-wider text-amber-300 uppercase font-['Cinzel']">
                 MA GIÁO ONLINE • THIÊN HẠ ĐỆ NHẤT TÀ PHÁI
               </div>
-              <div className="text-[8.5px] text-amber-100/85 flex items-center gap-1.5 tabular-nums">
+              <div className="text-[8.5px] text-white flex items-center gap-1.5 tabular-nums">
                 <span>
                   Cảnh: <strong className="text-red-400">{activeScene === 'main_hall' ? 'ĐẠI ĐIỆN' : 'SÂN LUYỆN VÕ'}</strong>
                 </span>
@@ -129,73 +202,97 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
                   Quân số: <strong className="text-amber-300">{disciples.length}/{config.sceneConfig.maxConcurrentPlayers}</strong>
                 </span>
                 <span>•</span>
-                <span className="text-emerald-300">
+                <span className="text-emerald-300 font-semibold">
                   Đi:{behaviorStats.moving} Võ:{behaviorStats.kungfu} Thiền:{behaviorStats.meditating}
                 </span>
                 {waitingQueue.length > 0 && (
-                  <span className="text-purple-300">(Chờ: {waitingQueue.length})</span>
+                  <span className="text-purple-200 font-semibold">(Chờ: {waitingQueue.length})</span>
                 )}
               </div>
             </div>
           </div>
 
           <div className="text-right shrink-0 tabular-nums">
-            <div className="text-[8px] uppercase text-amber-200/70">Kỳ Sát Hạch</div>
-            <div className="text-[10.5px] font-bold text-amber-400 font-mono">
+            <div className="text-[8px] uppercase text-amber-200">Kỳ Sát Hạch</div>
+            <div className="text-[10.5px] font-bold text-amber-300 font-mono">
               {miniGame.isActive ? `ĐANG THI (${miniGame.remainingSec}s)` : `${nextSceneCountdownSec}s`}
             </div>
           </div>
         </div>
       )}
 
-      {/* 2. SECT LEADER NAMEPLATE & REAL-TIME SPEECH SCROLL */}
+      {/* 2. SECT LEADER NAMEPLATE (SYNCHRONIZED WITH LOWERED THRONE +30PX) */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 z-20 flex flex-col items-center w-[46%]"
-        style={{ top: '8.5%' }}
+        className="absolute -translate-x-1/2 z-20 flex flex-col items-center w-[46%]"
+        style={{
+          left: `${thronePos.x}%`,
+          top: `${leaderNameplateTopPct}%`,
+          ...CRISP_TEXT_SHADOW,
+        }}
       >
-        <div className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-red-950/90 via-black/95 to-red-950/90 border border-amber-400/70 shadow-md">
+        <div
+          className="px-2.5 py-0.5 rounded-full border border-amber-400/75 shadow-md"
+          style={{ backgroundColor: `rgba(22, 8, 18, ${Math.min(0.85, panelBgOpacity + 0.25)})` }}
+        >
           <span className="text-[9.5px] font-bold text-amber-300 tracking-wide">
             👑 {sectLeader.currentLeaderName}
           </span>
         </div>
         {sectLeader.hasCustomPlayerLeader && (
-          <div className="mt-0.5 px-2 py-0.2 rounded bg-purple-950/85 border border-purple-400/50 text-[7.5px] text-purple-200">
+          <div
+            className="mt-0.5 px-2 py-0.2 rounded border border-purple-400/65 text-[7.5px] text-purple-100 font-semibold"
+            style={{ backgroundColor: `rgba(28, 10, 42, ${panelBgOpacity})` }}
+          >
             Thái Thượng: {sectLeader.formerLeaderName}
           </div>
         )}
       </div>
 
+      {/* 2B. TEMPORARY SECT LEADER SPEECH POPUP (AUTO-HIDE AFTER 4S WITH 0.7S FADE-OUT, BELOW THRONE STEPS) */}
       {overlayConfig.showSectLeaderSpeechBubble &&
         isPanelEnabled('sect_leader_speech') &&
-        sectLeader.currentSpeechText && (
+        sectLeader.currentSpeechText &&
+        speechFade.visible && (
           <div
-            className="magiao-hud-panel absolute left-1/2 -translate-x-1/2 z-30 w-[56%] px-2.5 py-1.5 rounded-xl bg-gradient-to-b from-stone-950/92 to-red-950/88 border border-amber-400/65 shadow-xl"
-            style={{ top: '22.5%' }}
+            data-testid="popup-sect-leader-speech"
+            className="magiao-hud-panel pointer-events-none absolute -translate-x-1/2 z-30 w-[56%] px-2.5 py-1.5 rounded-xl border border-amber-400/75 shadow-xl transition-opacity duration-150"
+            style={{
+              left: `${thronePos.x}%`,
+              top: `${leaderSpeechTopPct}%`,
+              backgroundColor: `rgba(16, 8, 26, ${panelBgOpacity})`,
+              opacity: speechFade.opacity,
+              ...CRISP_TEXT_SHADOW,
+            }}
           >
-            <div className="flex items-center justify-between text-[8px] text-amber-400 font-semibold mb-0.5">
+            <div className="flex items-center justify-between text-[8px] text-amber-300 font-bold mb-0.5">
               <span>📜 THÁNH CHỈ GIÁO CHỦ</span>
-              <span className="uppercase text-[7.5px] text-red-300">
+              <span className="uppercase text-[7.5px] text-red-300 font-semibold">
                 {sectLeader.currentAnimation}
               </span>
             </div>
-            <p className="text-[9.5px] leading-snug text-amber-50 font-medium line-clamp-2">
+            <p className="text-[9.5px] leading-snug text-white font-semibold line-clamp-2">
               “{sectLeader.currentSpeechText}”
             </p>
           </div>
         )}
 
-      {/* 3. UPPER-LEFT PANEL: BẢNG 4 ĐẠI TRƯỞNG LÃO (COMPACT SO HALL FLOOR IS 100% OPEN) */}
+      {/* 3. UPPER-LEFT FIXED PANEL: BẢNG TRƯỞNG LÃO (BACKGROUND OPACITY 0.4, CRISP TEXT) */}
       {overlayConfig.showElderLeaderboard && isPanelEnabled('elder_leaderboard') && (
         <div
-          className="magiao-hud-panel absolute left-1.5 z-20 w-[26.5%] rounded-lg bg-black/68 border border-amber-500/35 p-1.5 backdrop-blur-xs"
-          style={{ top: '8.2%' }}
+          data-testid="panel-elder-leaderboard"
+          className="magiao-hud-panel absolute left-1.5 z-20 w-[26.5%] rounded-lg border border-[#D4AF37]/70 p-1.5 shadow-md"
+          style={{
+            top: '8.2%',
+            backgroundColor: `rgba(12, 8, 22, ${panelBgOpacity})`,
+            ...CRISP_TEXT_SHADOW,
+          }}
         >
-          <div className="text-[8px] font-bold uppercase tracking-wider text-amber-400 border-b border-amber-500/20 pb-0.5 mb-1 flex items-center justify-between">
+          <div className="text-[8px] font-bold uppercase tracking-wider text-amber-300 border-b border-amber-400/35 pb-0.5 mb-1 flex items-center justify-between">
             <span>🏆 TRƯỞNG LÃO</span>
-            <span className="text-[7px] text-amber-200/70">TOP 4</span>
+            <span className="text-[7px] text-amber-200 font-semibold">TOP 4</span>
           </div>
           {elderLeaderboard.length === 0 ? (
-            <div className="text-[7.5px] text-stone-400 italic py-0.5 leading-tight">
+            <div className="text-[7.5px] text-stone-100 italic py-0.5 leading-tight">
               Chưa có cao thủ dâng lễ vật.
             </div>
           ) : (
@@ -203,13 +300,14 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
               {elderLeaderboard.map((elder, idx) => (
                 <div
                   key={elder.userId}
-                  className="flex items-center justify-between text-[8px] bg-stone-900/75 px-1 py-0.5 rounded border border-amber-500/15"
+                  className="flex items-center justify-between text-[8px] px-1 py-0.5 rounded border border-amber-400/25"
+                  style={{ backgroundColor: `rgba(18, 12, 32, ${panelBgOpacity})` }}
                 >
                   <div className="truncate pr-1">
-                    <span className="text-amber-400 font-bold mr-0.5">#{idx + 1}</span>
-                    <span className="text-stone-100 font-semibold">{elder.compactName}</span>
+                    <span className="text-amber-300 font-bold mr-0.5">#{idx + 1}</span>
+                    <span className="text-white font-bold">{elder.compactName}</span>
                   </div>
-                  <span className="text-amber-300 font-mono font-bold shrink-0 tabular-nums text-[7.5px]">
+                  <span className="text-yellow-300 font-mono font-bold shrink-0 tabular-nums text-[7.5px]">
                     {elder.totalCoins}x
                   </span>
                 </div>
@@ -219,45 +317,50 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
         </div>
       )}
 
-      {/* 4. UPPER-RIGHT PANEL: BẢNG PHONG CẤP & QUÀ TIKTOK (COMPACT TOP-RIGHT PLAQUE) */}
+      {/* 4. UPPER-RIGHT FIXED PANEL: BẢNG PHONG CẤP (BACKGROUND OPACITY 0.4, CRISP TEXT) */}
       {overlayConfig.showGiftRankTable && isPanelEnabled('gift_rank_table') && (
         <div
-          className="magiao-hud-panel absolute right-1.5 z-20 w-[27.5%] rounded-lg bg-black/68 border border-amber-500/35 p-1.5 backdrop-blur-xs"
-          style={{ top: '8.2%' }}
+          data-testid="panel-gift-rank-table"
+          className="magiao-hud-panel absolute right-1.5 z-20 w-[27.5%] rounded-lg border border-[#D4AF37]/70 p-1.5 shadow-md"
+          style={{
+            top: '8.2%',
+            backgroundColor: `rgba(12, 8, 22, ${panelBgOpacity})`,
+            ...CRISP_TEXT_SHADOW,
+          }}
         >
-          <div className="text-[8px] font-bold uppercase tracking-wider text-amber-400 border-b border-amber-500/20 pb-0.5 mb-0.5">
+          <div className="text-[8px] font-bold uppercase tracking-wider text-amber-300 border-b border-amber-400/35 pb-0.5 mb-0.5">
             🎁 PHONG CẤP
           </div>
-          <div className="space-y-0.2 text-[7.5px] leading-tight tabular-nums">
-            <div className="flex justify-between text-stone-200">
+          <div className="space-y-0.2 text-[7.5px] leading-tight tabular-nums font-semibold">
+            <div className="flex justify-between text-white">
               <span>🌹 1x</span>
               <span className="text-emerald-300">Ngoại Môn</span>
             </div>
-            <div className="flex justify-between text-stone-200">
+            <div className="flex justify-between text-white">
               <span>🍵 5x</span>
               <span className="text-sky-300">Nội Môn</span>
             </div>
-            <div className="flex justify-between text-stone-200">
+            <div className="flex justify-between text-white">
               <span>🍶 10x</span>
-              <span className="text-indigo-300">Sư Huynh</span>
+              <span className="text-indigo-200">Sư Huynh</span>
             </div>
-            <div className="flex justify-between text-stone-200">
+            <div className="flex justify-between text-white">
               <span>⚔️ 20x</span>
-              <span className="text-purple-300">Tinh Anh</span>
+              <span className="text-purple-200">Tinh Anh</span>
             </div>
-            <div className="flex justify-between text-stone-200">
+            <div className="flex justify-between text-white">
               <span>🛡️ 50x</span>
-              <span className="text-fuchsia-300">Hộ Pháp</span>
+              <span className="text-fuchsia-200">Hộ Pháp</span>
             </div>
-            <div className="flex justify-between text-stone-200">
+            <div className="flex justify-between text-white">
               <span>📜 99x</span>
-              <span className="text-rose-300">Trưởng Lão</span>
+              <span className="text-rose-200">Trưởng Lão</span>
             </div>
-            <div className="flex justify-between text-amber-200 font-semibold">
+            <div className="flex justify-between text-amber-200 font-bold">
               <span>👑 199x</span>
-              <span className="text-amber-400">Đồng Tôn</span>
+              <span className="text-amber-300">Đồng Tôn</span>
             </div>
-            <div className="flex justify-between text-red-300 font-bold pt-0.5 border-t border-amber-500/20">
+            <div className="flex justify-between text-red-200 font-bold pt-0.5 border-t border-amber-400/35">
               <span>🐉 Chí Tôn</span>
               <span className="text-yellow-300">GIÁO CHỦ</span>
             </div>
@@ -265,14 +368,18 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
         </div>
       )}
 
-      {/* 5. ACTIVE MINI-GAME HUD PANEL */}
+      {/* 5. ACTIVE MINI-GAME HUD PANEL (BACKGROUND OPACITY 0.4, BELOW THRONE) */}
       {overlayConfig.showMiniGameHUD &&
         isPanelEnabled('minigame_hud') &&
         miniGame.isActive &&
         miniGame.phase === 'playing' && (
           <div
-            className="magiao-hud-panel absolute left-3 right-3 z-30 rounded-xl bg-gradient-to-r from-red-950/95 via-stone-950/95 to-purple-950/95 border-2 border-amber-400 p-2.5 shadow-2xl"
-            style={{ top: '28%' }}
+            className="magiao-hud-panel absolute left-3 right-3 z-30 rounded-xl border border-amber-400/80 p-2.5 shadow-2xl"
+            style={{
+              top: '34%',
+              backgroundColor: `rgba(16, 8, 28, ${panelBgOpacity})`,
+              ...CRISP_TEXT_SHADOW,
+            }}
           >
             <div className="flex items-center justify-between mb-1">
               <div className="text-[11px] font-bold text-amber-300 uppercase font-['Cinzel']">
@@ -284,15 +391,15 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
             </div>
 
             {miniGame.gameId === 'ma_quyen_loan_vu' && (
-              <div className="text-[10px] text-amber-100 mb-1.5">
+              <div className="text-[10px] text-white font-semibold mb-1.5">
                 Bình luận từ khóa <strong className="text-yellow-300 underline">MÚA</strong> (mỗi người chỉ cần 1 bình luận) để đồng diễn Ma Quyền!
               </div>
             )}
 
             {miniGame.gameId === 'ma_anh_than_phap' && (
-              <div className="text-[10px] text-amber-100 mb-1.5">
+              <div className="text-[10px] text-white font-semibold mb-1.5">
                 Chướng ngại vật đang tới! Mau bình luận:{' '}
-                <strong className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-bold">
+                <strong className="px-1.5 py-0.5 rounded bg-amber-400 text-black font-bold">
                   {miniGame.currentObstacleDirection === 'TRAI'
                     ? 'TRÁI'
                     : miniGame.currentObstacleDirection === 'PHAI'
@@ -303,9 +410,9 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
             )}
 
             {miniGame.gameId === 'tam_khi_ma_tran' && (
-              <div className="text-[10px] text-amber-100 mb-1.5">
+              <div className="text-[10px] text-white font-semibold mb-1.5">
                 Giáo Chủ tung chưởng{' '}
-                <strong className="text-red-400">
+                <strong className="text-red-300">
                   {miniGame.leaderElement === 'LUA'
                     ? 'HỎA (LỬA)'
                     : miniGame.leaderElement === 'BANG'
@@ -324,13 +431,13 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
             )}
 
             {/* Team Progress Bar */}
-            <div className="w-full h-2.5 bg-stone-800 rounded-full overflow-hidden border border-amber-500/40">
+            <div className="w-full h-2.5 bg-stone-900/80 rounded-full overflow-hidden border border-amber-400/50">
               <div
                 className="h-full bg-gradient-to-r from-red-600 via-amber-500 to-emerald-400 transition-all duration-200"
                 style={{ width: `${miniGame.completionPct}%` }}
               />
             </div>
-            <div className="flex justify-between text-[9px] text-amber-200/90 mt-1 tabular-nums">
+            <div className="flex justify-between text-[9px] text-amber-100 font-semibold mt-1 tabular-nums">
               <span>
                 Hoàn thành: <strong>{miniGame.completedUserIds.length}/{Math.max(1, miniGame.participantUserIds.length)}</strong> ({miniGame.completionPct}%)
               </span>
@@ -339,17 +446,24 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
           </div>
         )}
 
-      {/* 6. MINI-GAME RESULT BANNER */}
+      {/* 6. TEMPORARY MINI-GAME RESULT BANNER (AUTO-HIDE AFTER 4S + 0.7S FADE-OUT, OPACITY 0.4) */}
       {isPanelEnabled('minigame_result') &&
         miniGame.isActive &&
-        miniGame.phase === 'result' && (
+        miniGame.phase === 'result' &&
+        miniGameResultFade.visible && (
           <div
-            className="magiao-hud-panel absolute left-4 right-4 z-30 rounded-xl bg-black/95 border-2 border-amber-400 p-3 text-center shadow-2xl"
-            style={{ top: '42%' }}
+            data-testid="popup-minigame-result"
+            className="magiao-hud-panel pointer-events-none absolute left-4 right-4 z-30 rounded-xl border border-amber-400/80 p-2.5 text-center shadow-2xl transition-opacity duration-150"
+            style={{
+              bottom: '22%',
+              backgroundColor: `rgba(12, 8, 22, ${panelBgOpacity})`,
+              opacity: miniGameResultFade.opacity,
+              ...CRISP_TEXT_SHADOW,
+            }}
           >
             <div
-              className={`text-sm font-bold uppercase font-['Cinzel'] ${
-                miniGame.isVictory ? 'text-emerald-400' : 'text-red-400'
+              className={`text-xs font-bold uppercase font-['Cinzel'] ${
+                miniGame.isVictory ? 'text-emerald-300' : 'text-red-300'
               }`}
             >
               {miniGame.isVictory
@@ -357,8 +471,8 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
                 : `🧹 CHƯA ĐẠT NGƯỠNG ${miniGame.title} (${miniGame.completionPct}%)`}
             </div>
             {!miniGame.isVictory && miniGame.sweepingPenaltyNames.length > 0 && (
-              <div className="mt-1 text-[10px] text-amber-200">
-                Phạt quét sân: <strong>{miniGame.sweepingPenaltyNames.join(', ')}</strong>
+              <div className="mt-1 text-[10px] text-white font-semibold">
+                Phạt quét sân: <strong className="text-amber-300">{miniGame.sweepingPenaltyNames.join(', ')}</strong>
                 <div className="text-[9px] text-emerald-300 mt-0.5">
                   (Chỉ cần bình luận lại 1 câu bất kỳ để quay về Đại Điện ngay!)
                 </div>
@@ -367,17 +481,26 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
           </div>
         )}
 
-      {/* 7. PROMOTION / THRONE TRANSFER BANNER */}
+      {/* 7. TEMPORARY PROMOTION / THRONE TRANSFER BANNER (AUTO-HIDE AFTER 4S + 0.7S FADE-OUT, OPACITY 0.4, NEVER COVERS SECT LEADER FACE) */}
       {latestPromotion &&
+        promotionFade.visible &&
         ((latestPromotion.isThroneTakeover && isPanelEnabled('throne_transfer_banner')) ||
           (!latestPromotion.isThroneTakeover && isPanelEnabled('promotion_banner'))) && (
           <div
-            className={`magiao-hud-panel absolute left-3 right-3 z-30 rounded-xl p-2 text-center border-2 shadow-2xl ${
+            data-testid="popup-promotion-banner"
+            className={`magiao-hud-panel pointer-events-none absolute left-3 right-3 z-30 rounded-xl p-2 text-center border transition-opacity duration-150 shadow-2xl ${
               latestPromotion.isThroneTakeover
-                ? 'bg-gradient-to-r from-red-950 via-amber-950 to-red-950 border-yellow-300'
-                : 'bg-gradient-to-r from-stone-950 via-purple-950 to-stone-950 border-amber-400'
+                ? 'border-yellow-300/85'
+                : 'border-[#D4AF37]/80'
             }`}
-            style={{ top: '24%' }}
+            style={{
+              bottom: '13.5%',
+              backgroundColor: latestPromotion.isThroneTakeover
+                ? `rgba(45, 10, 18, ${panelBgOpacity})`
+                : `rgba(16, 10, 30, ${panelBgOpacity})`,
+              opacity: promotionFade.opacity,
+              ...CRISP_TEXT_SHADOW,
+            }}
           >
             <div className="text-[9.5px] font-bold uppercase tracking-widest text-amber-300">
               {latestPromotion.isThroneTakeover
@@ -387,18 +510,23 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
             <div className="text-[11px] font-bold text-white mt-0.5">
               <span className="text-yellow-300">{latestPromotion.displayName}</span> dâng{' '}
               <span className="text-amber-300">{latestPromotion.giftName}</span> ➔ Vinh thăng{' '}
-              <span className="text-red-400 underline">{latestPromotion.newRankName}</span>!
+              <span className="text-red-300 underline">{latestPromotion.newRankName}</span>!
             </div>
           </div>
         )}
 
-      {/* 8. SWEEPING COURTYARD PENALTY LIST (MAX 5 PLAYERS) */}
+      {/* 8. SWEEPING COURTYARD PENALTY LIST (RAISED BY 25PX, BACKGROUND OPACITY 0.4) */}
       {overlayConfig.showSweepingPenaltyPanel &&
         isPanelEnabled('sweeping_list') &&
         sweepingDisciples.length > 0 && (
           <div
-            className="magiao-hud-panel absolute left-2 z-20 w-[38%] rounded-lg bg-amber-950/90 border border-amber-400/60 p-1.5 shadow-lg"
-            style={{ bottom: '6.5%' }}
+            data-testid="panel-sweeping-list"
+            className="magiao-hud-panel absolute right-1.5 z-20 w-[36%] rounded-lg border border-amber-400/70 p-1.5 shadow-lg"
+            style={{
+              bottom: `${sweepingPanelBottomPct}%`,
+              backgroundColor: `rgba(24, 12, 8, ${panelBgOpacity})`,
+              ...CRISP_TEXT_SHADOW,
+            }}
           >
             <div className="text-[8.5px] font-bold text-amber-300 uppercase flex items-center justify-between">
               <span>🧹 QUÉT SÂN ({sweepingDisciples.length}/5)</span>
@@ -407,10 +535,11 @@ export const MaGiaoOverlayHUD: React.FC<MaGiaoOverlayHUDProps> = ({
               {sweepingDisciples.map(sd => (
                 <div
                   key={sd.userId}
-                  className="text-[8px] text-amber-100 flex items-center justify-between bg-black/40 px-1 py-0.5 rounded"
+                  className="text-[8px] text-white flex items-center justify-between px-1 py-0.5 rounded border border-amber-400/25"
+                  style={{ backgroundColor: `rgba(10, 6, 14, ${panelBgOpacity})` }}
                 >
-                  <span className="truncate font-semibold">{sd.displayName}</span>
-                  <span className="text-[7.5px] text-amber-300 shrink-0">Quét lá...</span>
+                  <span className="truncate font-bold">{sd.displayName}</span>
+                  <span className="text-[7.5px] text-amber-300 font-semibold shrink-0">Quét lá...</span>
                 </div>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import {
+  DiscipleStayDurationConfig,
   LiveConnectionStatus,
   TikTokLiveEvent,
   MaGiaoMasterConfig,
@@ -177,6 +178,60 @@ export class LiveConnectionManager {
         return true;
       }
       return false;
+    }
+  }
+
+  public async pushStayDurationConfig(
+    stayDurationConfig: Partial<DiscipleStayDurationConfig>,
+    adminToken?: string
+  ): Promise<{ ok: boolean; stayDurationConfig?: DiscipleStayDurationConfig; error?: string }> {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (adminToken) headers['x-admin-token'] = adminToken;
+
+      const resp = await fetch('/api/stay-config', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ stayDurationConfig }),
+      });
+      const data = await resp.json().catch(() => null);
+      if (resp.ok && data?.ok) {
+        return { ok: true, stayDurationConfig: data.stayDurationConfig };
+      }
+      return { ok: false, error: data?.error || `Lỗi lưu cấu hình (${resp.status})` };
+    } catch (err) {
+      if (this.socket && this.socket.connected) {
+        this.socket.emit('magiao:update_stay_config', stayDurationConfig);
+        return { ok: true };
+      }
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Không thể kết nối Backend Server',
+      };
+    }
+  }
+
+  public async resetStayDurationConfigOnServer(
+    adminToken?: string
+  ): Promise<{ ok: boolean; stayDurationConfig?: DiscipleStayDurationConfig; error?: string }> {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (adminToken) headers['x-admin-token'] = adminToken;
+
+      const resp = await fetch('/api/stay-config/reset', {
+        method: 'POST',
+        headers,
+      });
+      const data = await resp.json().catch(() => null);
+      if (resp.ok && data?.ok) {
+        return { ok: true, stayDurationConfig: data.stayDurationConfig };
+      }
+      return { ok: false, error: data?.error || `Lỗi khôi phục mặc định (${resp.status})` };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Không thể kết nối Backend Server',
+      };
     }
   }
 }

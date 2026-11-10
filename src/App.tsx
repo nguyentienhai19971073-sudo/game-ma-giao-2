@@ -75,6 +75,21 @@ export function App() {
         sectGameManager.resetDemoCoins(typeof cmd.userId === 'string' ? cmd.userId : undefined);
       } else if (isRemote && cmd.action === 'import_rank_ledger' && cmd.payload) {
         sectGameManager.importRankAndLedgerData(cmd.payload as Record<string, unknown>);
+      } else if (isRemote && cmd.action === 'extend_stay_time') {
+        sectGameManager.extendDiscipleStayTime(
+          typeof cmd.userId === 'string' ? cmd.userId : undefined,
+          Number(cmd.addSeconds) || 120,
+          typeof cmd.reason === 'string' ? cmd.reason : 'Admin gia hạn'
+        );
+      } else if (isRemote && cmd.action === 'simulate_time_elapsed') {
+        sectGameManager.simulateTimeElapsed(
+          Number(cmd.seconds) || 30,
+          typeof cmd.userId === 'string' ? cmd.userId : undefined
+        );
+      } else if (isRemote && cmd.action === 'update_stay_config' && cmd.stayDurationConfig) {
+        sectGameManager.setStayDurationConfig(cmd.stayDurationConfig as Record<string, unknown>);
+      } else if (isRemote && cmd.action === 'reset_stay_config') {
+        sectGameManager.resetStayDurationConfig();
       } else if (isRemote && cmd.action === 'clear_demo') {
         sectGameManager.clearDemoData();
       } else if (isRemote && cmd.action === 'clear_all') {
@@ -123,6 +138,7 @@ export function App() {
             miniGame={snapshot.miniGame}
             sceneConfig={snapshot.config.sceneConfig}
             overlayConfig={snapshot.config.overlayConfig}
+            thronePosition={snapshot.config.sectLeader.thronePosition}
             minSeparationDist={snapshot.config.playerAnimationConfig.minSeparationDist}
           />
           <MaGiaoOverlayHUD snapshot={snapshot} isOBSMode />
@@ -259,6 +275,7 @@ export function App() {
               miniGame={snapshot.miniGame}
               sceneConfig={snapshot.config.sceneConfig}
               overlayConfig={snapshot.config.overlayConfig}
+              thronePosition={snapshot.config.sectLeader.thronePosition}
               minSeparationDist={snapshot.config.playerAnimationConfig.minSeparationDist}
               selectedDiscipleId={selectedDiscipleId}
               onSelectDisciple={d => setSelectedDiscipleId(d.userId)}

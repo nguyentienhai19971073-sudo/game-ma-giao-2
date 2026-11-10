@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type { Request } from 'express';
 import {
+  DiscipleStayDurationConfig,
   MaGiaoMasterConfig,
   OBSSyncSettings,
   OverlayConfig,
@@ -12,9 +13,12 @@ import {
 import {
   createDefaultMasterConfig,
   DEFAULT_OVERLAY_CONFIG,
+  DEFAULT_RANK_ACCUMULATION_CONFIG,
   DEFAULT_SCENE_CONFIG,
+  DEFAULT_STAY_DURATION_CONFIG,
   DEFAULT_VOICE_CONFIG,
   DEFAULT_SECT_LEADER_CONFIG,
+  sanitizeStayDurationConfig,
 } from '../src/data/sectDefaults';
 import { DEFAULT_SECT_DIALOGUE_BANK } from '../src/data/sectDialogueBank';
 
@@ -28,6 +32,7 @@ export function buildDefaultOBSSyncSettings(): OBSSyncSettings {
     sceneConfig: structuredClone(DEFAULT_SCENE_CONFIG),
     voiceConfig: structuredClone(DEFAULT_VOICE_CONFIG),
     sectLeaderConfig: structuredClone(DEFAULT_SECT_LEADER_CONFIG),
+    stayDurationConfig: structuredClone(DEFAULT_STAY_DURATION_CONFIG),
     updatedAt: Date.now(),
   };
 }
@@ -37,6 +42,12 @@ export function normalizeIncomingMasterConfig(
   current?: MaGiaoMasterConfig
 ): MaGiaoMasterConfig {
   const base = current ? structuredClone(current) : buildDefaultMasterConfig();
+  if (!base.stayDurationConfig) {
+    base.stayDurationConfig = structuredClone(DEFAULT_STAY_DURATION_CONFIG);
+  }
+  if (!base.rankAccumulation) {
+    base.rankAccumulation = structuredClone(DEFAULT_RANK_ACCUMULATION_CONFIG);
+  }
   if (!raw || typeof raw !== 'object') {
     return base;
   }
@@ -50,6 +61,12 @@ export function normalizeIncomingMasterConfig(
   }
   if (Array.isArray(obj.ranks) && obj.ranks.length > 0) {
     base.ranks = obj.ranks;
+  }
+  if (obj.rankAccumulation && typeof obj.rankAccumulation === 'object') {
+    base.rankAccumulation = {
+      ...base.rankAccumulation,
+      ...obj.rankAccumulation,
+    };
   }
   if (Array.isArray(obj.giftMappings) && obj.giftMappings.length > 0) {
     base.giftMappings = obj.giftMappings;
@@ -87,6 +104,22 @@ export function normalizeIncomingMasterConfig(
   if (obj.playerAnimationConfig && typeof obj.playerAnimationConfig === 'object') {
     base.playerAnimationConfig = { ...base.playerAnimationConfig, ...obj.playerAnimationConfig };
   }
+  if (obj.stayDurationConfig && typeof obj.stayDurationConfig === 'object') {
+    base.stayDurationConfig = sanitizeStayDurationConfig(
+      obj.stayDurationConfig,
+      base.stayDurationConfig
+    );
+    base.playerAnimationConfig.idleTimeoutSec = base.stayDurationConfig.inactivityTimeoutSec;
+  } else if (
+    obj.playerAnimationConfig &&
+    typeof obj.playerAnimationConfig.idleTimeoutSec === 'number'
+  ) {
+    base.stayDurationConfig = sanitizeStayDurationConfig(
+      { inactivityTimeoutSec: obj.playerAnimationConfig.idleTimeoutSec },
+      base.stayDurationConfig
+    );
+    base.playerAnimationConfig.idleTimeoutSec = base.stayDurationConfig.inactivityTimeoutSec;
+  }
   if (Array.isArray(obj.miniGames) && obj.miniGames.length > 0) {
     base.miniGames = obj.miniGames;
   }
@@ -97,7 +130,47 @@ export function normalizeIncomingMasterConfig(
     base.noticePanels = obj.noticePanels;
   }
   if (obj.overlayConfig && typeof obj.overlayConfig === 'object') {
-    base.overlayConfig = { ...base.overlayConfig, ...obj.overlayConfig };
+    const incomingOverlay = obj.overlayConfig as Partial<OverlayConfig>;
+    const isLegacyBeforeLayoutV2 = incomingOverlay.panelBgOpacity === undefined;
+    base.overlayConfig = {
+      ...DEFAULT_OVERLAY_CONFIG,
+      ...base.overlayConfig,
+      ...incomingOverlay,
+      panelBgOpacity:
+        typeof incomingOverlay.panelBgOpacity === 'number'
+          ? Math.max(0.05, Math.min(0.95, incomingOverlay.panelBgOpacity))
+          : base.overlayConfig.panelBgOpacity ?? 0.4,
+      popupDurationMs:
+        typeof incomingOverlay.popupDurationMs === 'number'
+          ? Math.max(1000, Math.min(15000, incomingOverlay.popupDurationMs))
+          : base.overlayConfig.popupDurationMs ?? 4000,
+      popupFadeOutMs:
+        typeof incomingOverlay.popupFadeOutMs === 'number'
+          ? Math.max(100, Math.min(3000, incomingOverlay.popupFadeOutMs))
+          : base.overlayConfig.popupFadeOutMs ?? 700,
+      autoHidePopups:
+        incomingOverlay.autoHidePopups !== undefined
+          ? Boolean(incomingOverlay.autoHidePopups)
+          : base.overlayConfig.autoHidePopups ?? true,
+    };
+
+    // Migrate legacy pre-V2 coordinates (Throne y=19 -> 22.13, Sweeping Courtyard yMin=88 -> 85.4)
+    if (isLegacyBeforeLayoutV2) {
+      if (base.sectLeader.thronePosition?.y === 19) {
+        base.sectLeader.thronePosition = { x: base.sectLeader.thronePosition.x || 50, y: 22.13 };
+      }
+      if (base.sceneConfig.throneReservedZone?.yMax === 29.5) {
+        base.sceneConfig.throneReservedZone = structuredClone(DEFAULT_SCENE_CONFIG.throneReservedZone);
+      }
+      if (base.sceneConfig.freeRoamBounds?.yMin === 31) {
+        base.sceneConfig.freeRoamBounds = structuredClone(DEFAULT_SCENE_CONFIG.freeRoamBounds);
+      }
+      if (base.sceneConfig.zones?.sweeping_courtyard?.yMin === 88) {
+        base.sceneConfig.zones.sweeping_courtyard = structuredClone(
+          DEFAULT_SCENE_CONFIG.zones.sweeping_courtyard
+        );
+      }
+    }
   }
   base.updatedAt = Date.now();
   return base;
@@ -112,11 +185,31 @@ export function normalizeIncomingOBSSyncSettings(
     return base;
   }
   const obj = raw as Record<string, unknown>;
+  const incomingOverlay = (obj.overlayConfig || {}) as Partial<OverlayConfig>;
+  const isLegacyBeforeLayoutV2 =
+    obj.overlayConfig !== undefined && incomingOverlay.panelBgOpacity === undefined;
 
   if (obj.overlayConfig && typeof obj.overlayConfig === 'object') {
     base.overlayConfig = {
+      ...DEFAULT_OVERLAY_CONFIG,
       ...base.overlayConfig,
-      ...(obj.overlayConfig as Partial<OverlayConfig>),
+      ...incomingOverlay,
+      panelBgOpacity:
+        typeof incomingOverlay.panelBgOpacity === 'number'
+          ? Math.max(0.05, Math.min(0.95, incomingOverlay.panelBgOpacity))
+          : base.overlayConfig.panelBgOpacity ?? 0.4,
+      popupDurationMs:
+        typeof incomingOverlay.popupDurationMs === 'number'
+          ? Math.max(1000, Math.min(15000, incomingOverlay.popupDurationMs))
+          : base.overlayConfig.popupDurationMs ?? 4000,
+      popupFadeOutMs:
+        typeof incomingOverlay.popupFadeOutMs === 'number'
+          ? Math.max(100, Math.min(3000, incomingOverlay.popupFadeOutMs))
+          : base.overlayConfig.popupFadeOutMs ?? 700,
+      autoHidePopups:
+        incomingOverlay.autoHidePopups !== undefined
+          ? Boolean(incomingOverlay.autoHidePopups)
+          : base.overlayConfig.autoHidePopups ?? true,
     };
   }
   if (obj.sceneConfig && typeof obj.sceneConfig === 'object') {
@@ -124,6 +217,11 @@ export function normalizeIncomingOBSSyncSettings(
       ...base.sceneConfig,
       ...(obj.sceneConfig as Partial<SceneConfig>),
     };
+    if (isLegacyBeforeLayoutV2 && base.sceneConfig.zones?.sweeping_courtyard?.yMin === 88) {
+      base.sceneConfig.zones.sweeping_courtyard = structuredClone(
+        DEFAULT_SCENE_CONFIG.zones.sweeping_courtyard
+      );
+    }
   }
   if (obj.voiceConfig && typeof obj.voiceConfig === 'object') {
     base.voiceConfig = {
@@ -136,6 +234,18 @@ export function normalizeIncomingOBSSyncSettings(
       ...base.sectLeaderConfig,
       ...(obj.sectLeaderConfig as Partial<SectLeaderConfig>),
     };
+    if (isLegacyBeforeLayoutV2 && base.sectLeaderConfig.thronePosition?.y === 19) {
+      base.sectLeaderConfig.thronePosition = {
+        x: base.sectLeaderConfig.thronePosition.x || 50,
+        y: 22.13,
+      };
+    }
+  }
+  if (obj.stayDurationConfig && typeof obj.stayDurationConfig === 'object') {
+    base.stayDurationConfig = sanitizeStayDurationConfig(
+      obj.stayDurationConfig as Partial<DiscipleStayDurationConfig>,
+      base.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG
+    );
   }
   base.updatedAt = Date.now();
   return base;
@@ -201,6 +311,9 @@ export class PersistentOBSSyncStore {
       sceneConfig: structuredClone(this.masterConfig.sceneConfig),
       voiceConfig: structuredClone(this.masterConfig.voiceConfig),
       sectLeaderConfig: structuredClone(this.masterConfig.sectLeader),
+      stayDurationConfig: structuredClone(
+        this.masterConfig.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG
+      ),
       updatedAt: Date.now(),
     };
     this.saveOBSToDisk(defaults);
@@ -236,6 +349,11 @@ export class PersistentOBSSyncStore {
       sceneConfig: structuredClone(this.obsSettings.sceneConfig),
       voiceConfig: structuredClone(this.obsSettings.voiceConfig),
       sectLeader: structuredClone(this.obsSettings.sectLeaderConfig),
+      stayDurationConfig: structuredClone(
+        this.obsSettings.stayDurationConfig ||
+          this.masterConfig.stayDurationConfig ||
+          DEFAULT_STAY_DURATION_CONFIG
+      ),
       updatedAt: this.obsSettings.updatedAt,
     };
     this.saveMasterToDisk(this.masterConfig);
@@ -256,10 +374,30 @@ export class PersistentOBSSyncStore {
       sceneConfig: structuredClone(this.masterConfig.sceneConfig),
       voiceConfig: structuredClone(this.masterConfig.voiceConfig),
       sectLeaderConfig: structuredClone(this.masterConfig.sectLeader),
+      stayDurationConfig: structuredClone(this.masterConfig.stayDurationConfig),
       updatedAt: this.masterConfig.updatedAt,
     };
     this.saveOBSToDisk(this.obsSettings);
     return this.getMasterConfig();
+  }
+
+  public updateStayDurationConfig(incoming: unknown): MaGiaoMasterConfig {
+    const sanitized = sanitizeStayDurationConfig(
+      incoming as Partial<DiscipleStayDurationConfig>,
+      this.masterConfig.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG
+    );
+    return this.updateMasterConfig({
+      ...this.masterConfig,
+      stayDurationConfig: sanitized,
+      playerAnimationConfig: {
+        ...this.masterConfig.playerAnimationConfig,
+        idleTimeoutSec: sanitized.inactivityTimeoutSec,
+      },
+    });
+  }
+
+  public resetStayDurationConfig(): MaGiaoMasterConfig {
+    return this.updateStayDurationConfig(structuredClone(DEFAULT_STAY_DURATION_CONFIG));
   }
 
   public resetMasterConfig(): MaGiaoMasterConfig {
@@ -270,6 +408,7 @@ export class PersistentOBSSyncStore {
       sceneConfig: structuredClone(this.masterConfig.sceneConfig),
       voiceConfig: structuredClone(this.masterConfig.voiceConfig),
       sectLeaderConfig: structuredClone(this.masterConfig.sectLeader),
+      stayDurationConfig: structuredClone(this.masterConfig.stayDurationConfig),
       updatedAt: this.masterConfig.updatedAt,
     };
     this.saveOBSToDisk(this.obsSettings);

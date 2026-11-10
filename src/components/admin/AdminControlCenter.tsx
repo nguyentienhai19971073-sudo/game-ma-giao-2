@@ -3,6 +3,7 @@ import {
   ADMIN_CATEGORIES,
   AdminCategoryId,
   DialogueCategory,
+  DiscipleStayDurationConfig,
   LiveConnectionStatus,
   MaGiaoMasterConfig,
   MiniGameId,
@@ -15,7 +16,11 @@ import {
   TikTokLiveEvent,
   VoiceProviderType,
 } from '../../types/magiao';
-import { CHUA_TO_MAGIAO_PARITY_TABLE } from '../../data/sectDefaults';
+import {
+  CHUA_TO_MAGIAO_PARITY_TABLE,
+  DEFAULT_STAY_DURATION_CONFIG,
+  sanitizeStayDurationConfig,
+} from '../../data/sectDefaults';
 import { DIALOGUE_CATEGORY_LABELS } from '../../data/sectDialogueBank';
 import { GameStateSnapshot, sectGameManager } from '../../systems/SectGameManager';
 import { liveConnectionManager } from '../../systems/LiveConnectionManager';
@@ -79,6 +84,21 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
   const [rankBackupJsonInput, setRankBackupJsonInput] = useState('');
   const [showBackupImportBox, setShowBackupImportBox] = useState(false);
 
+  // Player Stay Duration Config state (Tab 5: Quản Lý Đồ Đệ → Thời Gian Hoạt Động)
+  const [stayDraft, setStayDraft] = useState<DiscipleStayDurationConfig>(() =>
+    sanitizeStayDurationConfig(snapshot.config.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG)
+  );
+  const [staySaveStatus, setStaySaveStatus] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (snapshot.config.stayDurationConfig) {
+      setStayDraft(sanitizeStayDurationConfig(snapshot.config.stayDurationConfig));
+    }
+  }, [snapshot.config.stayDurationConfig]);
+
   useEffect(() => {
     return voiceManager.subscribe(setVoiceSnap);
   }, []);
@@ -98,6 +118,57 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
   const notifySync = (msg: string) => {
     setSyncMessage(msg);
     window.setTimeout(() => setSyncMessage(null), 3000);
+  };
+
+  const formatCountdownMMSS = (sec: number | undefined) => {
+    const safeSec = Math.max(0, Math.round(sec ?? 0));
+    const m = Math.floor(safeSec / 60);
+    const s = safeSec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')} (${safeSec}s)`;
+  };
+
+  const handleSaveStayConfig = async (customPatch?: Partial<DiscipleStayDurationConfig>) => {
+    const nextRaw = { ...stayDraft, ...(customPatch || {}) };
+    if (
+      customPatch?.inactivityTimeoutMinutes === undefined &&
+      customPatch?.inactivityTimeoutSec === undefined
+    ) {
+      nextRaw.inactivityTimeoutSec = Math.round((nextRaw.inactivityTimeoutMinutes || 7) * 60);
+    }
+    const sanitized = sectGameManager.setStayDurationConfig(nextRaw);
+    setStayDraft(sanitized);
+    liveConnectionManager.emitAdminCommand({
+      action: 'update_stay_config',
+      stayDurationConfig: sanitized,
+    });
+    const res = await liveConnectionManager.pushStayDurationConfig(sanitized);
+    if (res.ok) {
+      const msg = `✓ Đã lưu cài đặt Thời Gian Hoạt Động (${sanitized.inactivityTimeoutMinutes} phút = ${sanitized.inactivityTimeoutSec}s) & đồng bộ OBS!`;
+      setStaySaveStatus({ type: 'success', text: msg });
+      notifySync(msg);
+    } else {
+      const errMsg = `⚠ Đã áp dụng tại máy trạm nhưng lỗi lưu Server: ${res.error || 'Không xác định'}`;
+      setStaySaveStatus({ type: 'error', text: errMsg });
+    }
+    window.setTimeout(() => setStaySaveStatus(null), 4500);
+  };
+
+  const handleResetStayConfig = async () => {
+    const resetCfg = sectGameManager.resetStayDurationConfig();
+    setStayDraft(resetCfg);
+    liveConnectionManager.emitAdminCommand({ action: 'reset_stay_config' });
+    const res = await liveConnectionManager.resetStayDurationConfigOnServer();
+    if (res.ok) {
+      const msg = '✓ Đã khôi phục mặc định Thời Gian Hoạt Động: 7 phút (420 giây)!';
+      setStaySaveStatus({ type: 'success', text: msg });
+      notifySync(msg);
+    } else {
+      setStaySaveStatus({
+        type: 'error',
+        text: `⚠ Đã khôi phục 7 phút tại máy trạm nhưng lỗi Server: ${res.error || ''}`,
+      });
+    }
+    window.setTimeout(() => setStaySaveStatus(null), 4500);
   };
 
   const updateAndSyncConfig = async (mutator: (draft: MaGiaoMasterConfig) => void, msg = 'Đã lưu & đồng bộ cấu hình!') => {
@@ -639,47 +710,337 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
         )}
 
         {/* ==================================================================
-            5. QUẢN LÝ ĐỒ ĐỆ (DISCIPLE INSPECTOR & DIRECT ACTIONS)
+            5. QUẢN LÝ ĐỒ ĐỆ → THỜI GIAN HOẠT ĐỘNG & BẢNG THEO DÕI USER Ở SẢNH
            ================================================================== */}
         {activeTab === 'disciples' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2 bg-stone-900 p-2.5 rounded-lg border border-amber-500/30">
+          <div className="space-y-4">
+            {/* A. QUẢN LÝ ĐỒ ĐỆ -> THỜI GIAN HOẠT ĐỘNG (CÀI ĐẶT THỜI GIAN NGƯỜI CHƠI Ở LẠI ĐẠI ĐIỆN) */}
+            <div className="p-3.5 rounded-lg bg-stone-900 border border-amber-500/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-amber-400 uppercase text-xs sm:text-sm">
+                    ⏱️ Quản Lý Đồ Đệ → Thời Gian Hoạt Động (Thời Gian Ở Lại Đại Điện)
+                  </div>
+                  <div className="text-[11px] text-stone-400">
+                    Mặc định: <strong className="text-amber-300">7 phút (420 giây)</strong> • Chỉ Bình luận & Quà hợp lệ mới làm mới bộ đếm • Giữ nguyên Xu & Cấp bậc khi rời sảnh
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => handleSaveStayConfig()}
+                    className="px-3.5 py-1.5 rounded bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold shadow cursor-pointer"
+                  >
+                    💾 Lưu Cài Đặt
+                  </button>
+                  <button
+                    onClick={() => handleResetStayConfig()}
+                    className="px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-bold cursor-pointer"
+                  >
+                    ↺ Khôi Phục Mặc Định (7 Phút)
+                  </button>
+                </div>
+              </div>
+
+              {staySaveStatus && (
+                <div
+                  className={`p-2 rounded border text-xs font-semibold ${
+                    staySaveStatus.type === 'success'
+                      ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-200'
+                      : 'bg-red-950/80 border-red-500/60 text-red-200'
+                  }`}
+                >
+                  {staySaveStatus.text}
+                </div>
+              )}
+
+              {/* 1. Thời gian không tương tác trước khi rời sảnh (Ô nhập + Preset 1..30 phút) */}
+              <div className="p-3 rounded bg-stone-950 border border-stone-800 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="font-bold text-amber-300 text-xs">
+                    1. Thời gian không tương tác trước khi rời sảnh (1 – 30 phút):
+                  </label>
+                  <span className="text-[11px] font-mono text-emerald-300">
+                    Đang cài đặt: <strong>{stayDraft.inactivityTimeoutMinutes} phút</strong> ({stayDraft.inactivityTimeoutSec} giây)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-stone-900 px-2.5 py-1 rounded border border-amber-500/40">
+                    <span className="text-stone-300 text-xs">Số phút (1–30):</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      step={1}
+                      value={stayDraft.inactivityTimeoutMinutes}
+                      onChange={e => {
+                        const raw = Number(e.target.value);
+                        const clampedMin = Number.isFinite(raw)
+                          ? Math.max(1, Math.min(30, Math.round(raw)))
+                          : 7;
+                        setStayDraft(prev => ({
+                          ...prev,
+                          inactivityTimeoutMinutes: clampedMin,
+                          inactivityTimeoutSec: clampedMin * 60,
+                        }));
+                      }}
+                      className="w-16 px-2 py-1 rounded bg-black border border-stone-700 text-amber-300 font-bold text-center tabular-nums"
+                    />
+                    <span className="text-stone-400 text-[11px]">phút ({stayDraft.inactivityTimeoutSec}s)</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-[11px] text-stone-400 mr-1">Chọn nhanh:</span>
+                    {[1, 3, 5, 7, 10, 15, 20, 30].map(mins => {
+                      const isActive =
+                        stayDraft.inactivityTimeoutMinutes === mins &&
+                        stayDraft.inactivityTimeoutSec === mins * 60;
+                      return (
+                        <button
+                          key={`preset_stay_${mins}`}
+                          type="button"
+                          onClick={() => {
+                            const updated: Partial<DiscipleStayDurationConfig> = {
+                              inactivityTimeoutMinutes: mins,
+                              inactivityTimeoutSec: mins * 60,
+                            };
+                            setStayDraft(prev => ({ ...prev, ...updated }));
+                            handleSaveStayConfig(updated);
+                          }}
+                          className={`px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition ${
+                            isActive
+                              ? 'bg-amber-500 text-black shadow'
+                              : 'bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700'
+                          }`}
+                        >
+                          {mins} phút {mins === 7 ? '(Mặc định)' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Tùy chọn bổ sung (Bật/tắt rời sảnh, đi ra cổng, cảnh báo, cách áp dụng) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-2">
+                  <label className="flex items-center justify-between gap-2 cursor-pointer">
+                    <span className="text-stone-200 font-semibold">
+                      🚪 Tự động cho nhân vật rời sảnh khi hết thời gian
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={stayDraft.autoDepartEnabled}
+                      onChange={e =>
+                        setStayDraft(prev => ({ ...prev, autoDepartEnabled: e.target.checked }))
+                      }
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between gap-2 cursor-pointer">
+                    <span className="text-stone-200 font-semibold">
+                      🚶 Bật hoạt ảnh đi bộ ra cổng khi rời sảnh
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={stayDraft.walkToGateOnDepart}
+                      onChange={e =>
+                        setStayDraft(prev => ({ ...prev, walkToGateOnDepart: e.target.checked }))
+                      }
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-stone-400 text-[11px]">
+                      Thời lượng hoạt ảnh rời sảnh (1–15 giây):
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={15}
+                        value={stayDraft.departAnimationDurationSec}
+                        onChange={e => {
+                          const v = Math.max(1, Math.min(15, Math.round(Number(e.target.value) || 4)));
+                          setStayDraft(prev => ({ ...prev, departAnimationDurationSec: v }));
+                        }}
+                        className="w-14 px-2 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-300 font-mono text-center"
+                      />
+                      <span className="text-[11px] text-stone-400">giây</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-2">
+                  <label className="flex items-center justify-between gap-2 cursor-pointer">
+                    <span className="text-stone-200 font-semibold">
+                      ⚠️ Bật cảnh báo sắp hết thời gian ở lại
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={stayDraft.warningBeforeDepartEnabled}
+                      onChange={e =>
+                        setStayDraft(prev => ({
+                          ...prev,
+                          warningBeforeDepartEnabled: e.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-stone-400 text-[11px]">
+                      Thời điểm cảnh báo trước khi rời sảnh:
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={5}
+                        max={300}
+                        step={5}
+                        value={stayDraft.warningBeforeDepartSec}
+                        onChange={e => {
+                          const v = Math.max(5, Math.min(300, Math.round(Number(e.target.value) || 30)));
+                          setStayDraft(prev => ({ ...prev, warningBeforeDepartSec: v }));
+                        }}
+                        className="w-16 px-2 py-0.5 rounded bg-stone-900 border border-stone-700 text-amber-300 font-mono text-center"
+                      />
+                      <span className="text-[11px] text-stone-400">giây</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-1">
+                    <label className="block text-stone-400 text-[11px] mb-1">
+                      Cách áp dụng khi thay đổi thời gian:
+                    </label>
+                    <select
+                      value={stayDraft.applyMode}
+                      onChange={e =>
+                        setStayDraft(prev => ({
+                          ...prev,
+                          applyMode: e.target.value === 'new_only' ? 'new_only' : 'immediate',
+                        }))
+                      }
+                      className="w-full px-2 py-1 rounded bg-stone-900 border border-stone-700 text-amber-200 text-xs"
+                    >
+                      <option value="immediate">
+                        ⚡ Áp dụng ngay cho người đang ở sảnh & người mới
+                      </option>
+                      <option value="new_only">
+                        🆕 Chỉ áp dụng với người mới (Giữ nguyên hạn cũ của người đang ở sảnh)
+                      </option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* B. THANH CÔNG CỤ TÌM KIẾM & GIA HẠN THỜI GIAN HÀNG LOẠT */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-stone-900 p-2.5 rounded-lg border border-amber-500/30">
               <input
                 type="text"
                 value={discipleSearch}
                 onChange={e => setDiscipleSearch(e.target.value)}
-                placeholder="🔍 Tìm kiếm đệ tử theo tên hoặc cấp bậc..."
-                className="flex-1 px-2.5 py-1 rounded bg-stone-950 border border-stone-700"
+                placeholder="🔍 Tìm kiếm đệ tử theo tên TikTok, ID hoặc chức danh..."
+                className="flex-1 min-w-[200px] px-2.5 py-1.5 rounded bg-stone-950 border border-stone-700"
               />
               <button
-                onClick={() => sectGameManager.spawnDemoPlayers(5)}
-                className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold cursor-pointer"
+                onClick={() => {
+                  const count = sectGameManager.extendDiscipleStayTime(
+                    undefined,
+                    120,
+                    'Admin gia hạn +2 phút toàn sảnh'
+                  );
+                  liveConnectionManager.emitAdminCommand({
+                    action: 'extend_stay_time',
+                    addSeconds: 120,
+                    reason: 'Admin gia hạn +2 phút toàn sảnh',
+                  });
+                  notifySync(`Đã gia hạn +2 phút (120s) cho toàn bộ ${count} người chơi đang ở sảnh!`);
+                }}
+                className="px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 text-white font-bold cursor-pointer"
+              >
+                ⏳ Gia Hạn Toàn Sảnh (+2 Phút)
+              </button>
+              <button
+                onClick={() => {
+                  sectGameManager.spawnDemoPlayers(5);
+                  liveConnectionManager.emitAdminCommand({ action: 'spawn_demo', count: 5 });
+                }}
+                className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold cursor-pointer"
               >
                 +5 Đệ Tử
               </button>
               <button
-                onClick={() => sectGameManager.clearAllPlayers()}
-                className="px-3 py-1 rounded bg-red-800 hover:bg-red-700 text-white font-semibold cursor-pointer"
+                onClick={() => {
+                  sectGameManager.clearAllPlayers();
+                  liveConnectionManager.emitAdminCommand({ action: 'clear_all' });
+                }}
+                className="px-3 py-1.5 rounded bg-red-800 hover:bg-red-700 text-white font-semibold cursor-pointer"
               >
                 Xóa Hết
               </button>
             </div>
 
+            {/* C. CHI TIẾT & THAO TÁC TRỰC TIẾP TRÊN ĐỆ TỬ ĐANG CHỌN */}
             {selectedDisciple && (
               <div className="p-3 rounded-lg bg-stone-900 border border-amber-400/50 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <span className="text-amber-400 font-bold text-sm">{selectedDisciple.displayName}</span>
                     <span className="ml-2 px-2 py-0.5 rounded bg-stone-800 text-amber-200 text-[10px]">
-                      Tên 5 ký tự: <strong>{selectedDisciple.compactName}</strong>
+                      ID: <code>{selectedDisciple.userId}</code> • Tên 5 ký tự: <strong>{selectedDisciple.compactName}</strong>
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-purple-950 border border-purple-400/40 text-purple-200 font-bold">
-                    {selectedDisciple.rankName} ({selectedDisciple.totalCoins} xu)
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-stone-950 border border-amber-500/40 text-amber-300 font-mono text-[11px]">
+                      Còn lại: <strong>{formatCountdownMMSS(selectedDisciple.remainingStaySec)}</strong>
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-purple-950 border border-purple-400/40 text-purple-200 font-bold">
+                      {selectedDisciple.rankName} ({selectedDisciple.totalCoins} xu)
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 pt-1">
+                  <button
+                    onClick={() => {
+                      sectGameManager.extendDiscipleStayTime(
+                        selectedDisciple.userId,
+                        60,
+                        `Admin gia hạn +1 phút cho ${selectedDisciple.displayName}`
+                      );
+                      liveConnectionManager.emitAdminCommand({
+                        action: 'extend_stay_time',
+                        userId: selectedDisciple.userId,
+                        addSeconds: 60,
+                        reason: `Admin gia hạn +1 phút cho ${selectedDisciple.displayName}`,
+                      });
+                      notifySync(`Đã gia hạn +1 phút (60s) cho ${selectedDisciple.displayName}!`);
+                    }}
+                    className="px-2.5 py-1 rounded bg-sky-700 hover:bg-sky-600 text-white font-bold cursor-pointer"
+                  >
+                    ⏳ Gia Hạn +1 Phút
+                  </button>
+                  <button
+                    onClick={() => {
+                      sectGameManager.extendDiscipleStayTime(
+                        selectedDisciple.userId,
+                        300,
+                        `Admin gia hạn +5 phút cho ${selectedDisciple.displayName}`
+                      );
+                      liveConnectionManager.emitAdminCommand({
+                        action: 'extend_stay_time',
+                        userId: selectedDisciple.userId,
+                        addSeconds: 300,
+                        reason: `Admin gia hạn +5 phút cho ${selectedDisciple.displayName}`,
+                      });
+                      notifySync(`Đã gia hạn +5 phút (300s) cho ${selectedDisciple.displayName}!`);
+                    }}
+                    className="px-2.5 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white font-bold cursor-pointer"
+                  >
+                    ⏳ Gia Hạn +5 Phút
+                  </button>
                   {config.ranks.map(r => (
                     <button
                       key={r.id}
@@ -719,46 +1080,169 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
               </div>
             )}
 
-            <div className="max-h-[340px] overflow-y-auto space-y-1">
-              {disciples
-                .filter(
-                  d =>
-                    d.displayName.toLowerCase().includes(discipleSearch.toLowerCase()) ||
-                    d.rankName.toLowerCase().includes(discipleSearch.toLowerCase())
-                )
-                .map(d => (
-                  <div
-                    key={d.userId}
-                    onClick={() => onSelectDiscipleId(d.userId)}
-                    className={`p-2 rounded border flex items-center justify-between cursor-pointer ${
-                      selectedDisciple?.userId === d.userId
-                        ? 'bg-amber-950/50 border-amber-400'
-                        : 'bg-stone-900/80 border-stone-800 hover:bg-stone-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: d.secondaryColor }}
-                      />
-                      <div className="truncate">
-                        <span className="font-bold text-stone-100">{d.displayName}</span>
-                        <span className="ml-1.5 text-[10px] text-stone-400">
-                          [{d.compactName}] • {d.gender === 'nam' ? 'Nam' : 'Nữ'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 tabular-nums">
-                      <span className="text-amber-300 font-semibold">{d.rankName}</span>
-                      <span className="text-stone-400 font-mono">{d.totalCoins} xu</span>
-                      {d.isSweepingPenalty && (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-700 text-black font-bold text-[9px]">
-                          🧹 Quét sân
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+            {/* D. BẢNG THEO DÕI USER ĐANG Ở SẢNH (6 CỘT + NÚT GIA HẠN THỜI GIAN) */}
+            <div className="p-3 rounded-lg bg-stone-900 border border-stone-800 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-bold text-amber-300 uppercase">
+                  📊 Bảng Theo Dõi User Đang Ở Sảnh ({disciples.length}/{config.sceneConfig.maxConcurrentPlayers || 80} người • Hàng chờ: {waitingQueue.length})
+                </div>
+                <div className="flex items-center gap-2 text-[10px]">
+                  <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300">
+                    Đang hoạt động: {disciples.filter(d => d.stayStatus === 'active' || !d.stayStatus).length}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-950 border border-amber-500/40 text-amber-300">
+                    Sắp hết giờ: {disciples.filter(d => d.stayStatus === 'expiring_soon').length}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-red-950 border border-red-500/40 text-red-300">
+                    Đang rời sảnh: {disciples.filter(d => d.stayStatus === 'departing' || d.fsmState === 'departing_gate').length}
+                  </span>
+                </div>
+              </div>
+
+              <div className="max-h-[380px] overflow-x-auto overflow-y-auto rounded border border-stone-800">
+                <table className="w-full text-left border-collapse text-[11px] tabular-nums">
+                  <thead className="bg-stone-950 text-stone-400 sticky top-0 z-10 border-b border-stone-800">
+                    <tr>
+                      <th className="p-2">Tên TikTok</th>
+                      <th className="p-2">Chức danh</th>
+                      <th className="p-2">Hoạt động hiện tại</th>
+                      <th className="p-2">Tương tác cuối</th>
+                      <th className="p-2">Còn lại trước khi rời</th>
+                      <th className="p-2">Trạng thái</th>
+                      <th className="p-2 text-right">Gia hạn / Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-800/70">
+                    {disciples
+                      .filter(
+                        d =>
+                          d.displayName.toLowerCase().includes(discipleSearch.toLowerCase()) ||
+                          d.userId.toLowerCase().includes(discipleSearch.toLowerCase()) ||
+                          d.rankName.toLowerCase().includes(discipleSearch.toLowerCase())
+                      )
+                      .map(d => {
+                        const status =
+                          d.fsmState === 'departing_gate' || d.stayStatus === 'departing'
+                            ? 'departing'
+                            : d.stayStatus === 'expiring_soon'
+                            ? 'expiring_soon'
+                            : 'active';
+                        const lastTimeStr = new Date(
+                          d.lastInteractionAt || d.joinedAt
+                        ).toLocaleTimeString('vi-VN');
+                        const activityLabel = sectGameManager.describeDiscipleCurrentActivity(d);
+
+                        return (
+                          <tr
+                            key={d.userId}
+                            onClick={() => onSelectDiscipleId(d.userId)}
+                            className={`cursor-pointer transition ${
+                              selectedDisciple?.userId === d.userId
+                                ? 'bg-amber-950/50'
+                                : 'bg-stone-900/70 hover:bg-stone-800/70'
+                            }`}
+                          >
+                            <td className="p-2">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: d.secondaryColor }}
+                                />
+                                <div>
+                                  <div className="font-bold text-stone-100">{d.displayName}</div>
+                                  <div className="text-[10px] text-stone-400 font-mono">
+                                    ID: {d.userId} [{d.compactName}]
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <div className="font-semibold text-amber-300">{d.rankName}</div>
+                              <div className="text-[10px] text-stone-400 font-mono">
+                                {d.totalCoins} xu ({d.giftCount} quà)
+                              </div>
+                            </td>
+                            <td className="p-2 text-stone-200">
+                              <div>{activityLabel}</div>
+                              <div className="text-[10px] text-stone-500 font-mono">
+                                ({Math.round(d.x)}%, {Math.round(d.y)}%) • {d.animation}
+                              </div>
+                            </td>
+                            <td className="p-2 font-mono text-stone-300">{lastTimeStr}</td>
+                            <td className="p-2 font-mono font-bold">
+                              <span
+                                className={
+                                  status === 'departing'
+                                    ? 'text-red-400'
+                                    : status === 'expiring_soon'
+                                    ? 'text-amber-400'
+                                    : 'text-emerald-300'
+                                }
+                              >
+                                {formatCountdownMMSS(d.remainingStaySec)}
+                              </span>
+                            </td>
+                            <td className="p-2">
+                              {status === 'departing' ? (
+                                <span className="px-2 py-0.5 rounded bg-red-950 border border-red-500/50 text-red-300 font-bold text-[10px]">
+                                  🚪 Đang rời sảnh
+                                </span>
+                              ) : status === 'expiring_soon' ? (
+                                <span className="px-2 py-0.5 rounded bg-amber-950 border border-amber-500/50 text-amber-300 font-bold text-[10px]">
+                                  ⚠️ Sắp hết giờ
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">
+                                  ● Đang hoạt động
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2 text-right">
+                              <div
+                                className="flex items-center justify-end gap-1"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <button
+                                  onClick={() => {
+                                    sectGameManager.extendDiscipleStayTime(
+                                      d.userId,
+                                      120,
+                                      `Admin gia hạn +2 phút cho ${d.displayName}`
+                                    );
+                                    liveConnectionManager.emitAdminCommand({
+                                      action: 'extend_stay_time',
+                                      userId: d.userId,
+                                      addSeconds: 120,
+                                      reason: `Admin gia hạn +2 phút cho ${d.displayName}`,
+                                    });
+                                    notifySync(`Đã gia hạn +2 phút cho ${d.displayName}!`);
+                                  }}
+                                  className="px-2 py-1 rounded bg-sky-800 hover:bg-sky-700 text-white font-bold text-[10px] cursor-pointer"
+                                  title="Gia hạn thêm 2 phút ở lại sảnh"
+                                >
+                                  +2m
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    dispatchTestComment(
+                                      d.userId,
+                                      d.displayName,
+                                      'Đệ tử xin tiếp tục hầu cận Giáo Chủ!'
+                                    );
+                                  }}
+                                  className="px-2 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer"
+                                  title="Giả lập User bình luận để làm mới bộ đếm thời gian"
+                                >
+                                  Làm mới
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -2772,8 +3256,15 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
            ================================================================== */}
         {activeTab === 'notices_leaderboard' && (
           <div className="space-y-2.5">
-            <div className="font-bold text-amber-400 uppercase">
-              🏆 Cấu Hình 8 Bảng Thông Báo & Bảng Xếp Hạng Trưởng Lão
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="font-bold text-amber-400 uppercase">
+                🏆 Cấu Hình 8 Bảng Thông Báo & Bảng Xếp Hạng Trưởng Lão
+              </div>
+              <div className="text-[11px] text-emerald-300">
+                Opacity nền: <strong>{(config.overlayConfig.panelBgOpacity ?? 0.4).toFixed(2)}</strong> • Tự ẩn Popup:{' '}
+                <strong>{((config.overlayConfig.popupDurationMs || 4000) / 1000).toFixed(1)}s</strong> (Fade:{' '}
+                {((config.overlayConfig.popupFadeOutMs || 700) / 1000).toFixed(1)}s)
+              </div>
             </div>
             {config.noticePanels.map((panel, idx) => (
               <div
@@ -2783,7 +3274,10 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                 <div>
                   <div className="font-bold text-amber-200">{panel.title}</div>
                   <div className="text-[10px] text-stone-400">
-                    ID: {panel.id} • Vị trí: {panel.position} • Thời lượng: {panel.durationMs}ms
+                    ID: {panel.id} • Vị trí: {panel.position} • Thời lượng:{' '}
+                    {panel.durationMs === 0
+                      ? 'Cố định (Luôn hiển thị)'
+                      : `${config.overlayConfig.popupDurationMs || panel.durationMs}ms (Tự ẩn)`}
                   </div>
                 </div>
                 <input
@@ -2801,12 +3295,430 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
         )}
 
         {/* ==================================================================
-            16. LAYOUT & CSS (9:16 FRAMING, SCALES & CUSTOM CSS)
+            16. LAYOUT & CSS (9:16 FRAMING, THRONE POS, SWEEPING POS, OPACITY 0.4 & POPUP 4S)
            ================================================================== */}
         {activeTab === 'layout_css' && (
-          <div className="space-y-3">
+          <div className="space-y-3 tabular-nums">
+            {/* A. VỊ TRÍ GIÁO CHỦ & CỤM NGAI VÀNG (HẠ 30PX TRÊN KHUNG 9:16) */}
+            <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-amber-400 uppercase">
+                    👑 1. Vị Trí Ngai Giáo Chủ & Nhân Vật Giáo Chủ (Khung Dọc 9:16)
+                  </div>
+                  <div className="text-[11px] text-stone-400">
+                    Tọa độ hiện tại: <strong className="text-amber-300">X = {config.sectLeader.thronePosition.x.toFixed(1)}%</strong>,{' '}
+                    <strong className="text-amber-300">Y = {config.sectLeader.thronePosition.y.toFixed(2)}%</strong>{' '}
+                    <span className="text-emerald-300">
+                      (Dịch chuyển dọc so với gốc 19%: {Math.round(((config.sectLeader.thronePosition.y - 19) / 100) * 960) >= 0 ? '+' : ''}
+                      {Math.round(((config.sectLeader.thronePosition.y - 19) / 100) * 960)}px — Chuẩn hạ xuống: +30px)
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    updateAndSyncConfig(d => {
+                      d.sectLeader.thronePosition = { x: 50, y: 22.13 };
+                    });
+                    notifySync('Đã khôi phục vị trí Ngai Giáo Chủ mặc định (X: 50%, Y: 22.13% — Hạ xuống 30px)!');
+                  }}
+                  className="px-3 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/40 text-xs font-bold cursor-pointer"
+                >
+                  ↺ Khôi Phục Vị Trí Ngai Mặc Định (+30px)
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-stone-300 font-semibold">Tọa độ ngang X Ngai Giáo Chủ (%):</span>
+                    <span className="text-amber-300 font-mono font-bold">{config.sectLeader.thronePosition.x.toFixed(1)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={35}
+                    max={65}
+                    step={0.5}
+                    value={config.sectLeader.thronePosition.x}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.sectLeader.thronePosition.x = Number(e.target.value);
+                      })
+                    }
+                    className="w-full"
+                  />
+                </label>
+
+                <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-stone-300 font-semibold">Tọa độ dọc Y Ngai Giáo Chủ (%):</span>
+                    <span className="text-amber-300 font-mono font-bold">
+                      {config.sectLeader.thronePosition.y.toFixed(2)}% ({Math.round((config.sectLeader.thronePosition.y / 100) * 960)}px)
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={15}
+                    max={29}
+                    step={0.1}
+                    value={config.sectLeader.thronePosition.y}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.sectLeader.thronePosition.y = Number(e.target.value);
+                      })
+                    }
+                    className="w-full"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => sectGameManager.triggerSectLeaderAnimation('stand_up_throne')}
+                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 text-xs font-semibold cursor-pointer"
+                >
+                  🧍 Test Đứng Dậy Tại Ngai
+                </button>
+                <button
+                  onClick={() => sectGameManager.triggerSectLeaderAnimation('walk_down_steps')}
+                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 text-xs font-semibold cursor-pointer"
+                >
+                  🚶 Test Bước Xuống Thềm
+                </button>
+                <button
+                  onClick={() => sectGameManager.triggerSectLeaderAnimation('return_to_throne')}
+                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700 text-xs font-semibold cursor-pointer"
+                >
+                  🐉 Test Trở Về Ngai Vàng
+                </button>
+              </div>
+            </div>
+
+            {/* B. VỊ TRÍ KHU VỰC QUÉT SÂN (NÂNG LÊN 25PX TRÊN KHUNG 9:16) */}
+            <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/40 space-y-3">
+              {(() => {
+                const sweepRect = config.sceneConfig.zones.sweeping_courtyard || {
+                  xMin: 73,
+                  xMax: 94,
+                  yMin: 85.4,
+                  yMax: 92.4,
+                  label: 'Góc Phạt Quét Sân',
+                };
+                const sweepWidth = Math.max(12, sweepRect.xMax - sweepRect.xMin);
+                const sweepHeight = Math.max(5, sweepRect.yMax - sweepRect.yMin);
+                const offsetPxY = Math.round(((sweepRect.yMin - 88) / 100) * 960);
+
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-amber-400 uppercase">
+                          🧹 2. Vị Trí Khu Vực Quét Sân (Đồng Bộ Sân & Nhân Vật Quét Sân)
+                        </div>
+                        <div className="text-[11px] text-stone-400">
+                          Tọa độ hiện tại: <strong className="text-amber-300">X = {sweepRect.xMin.toFixed(1)}%..{sweepRect.xMax.toFixed(1)}%</strong>,{' '}
+                          <strong className="text-amber-300">Y = {sweepRect.yMin.toFixed(1)}%..{sweepRect.yMax.toFixed(1)}%</strong>{' '}
+                          <span className="text-emerald-300">
+                            (Dịch chuyển dọc so với gốc 88%: {offsetPxY >= 0 ? '+' : ''}{offsetPxY}px — Chuẩn nâng lên: -25px)
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          updateAndSyncConfig(d => {
+                            d.sceneConfig.zones.sweeping_courtyard = {
+                              xMin: 73,
+                              xMax: 94,
+                              yMin: 85.4,
+                              yMax: 92.4,
+                              label: 'Góc Phạt Quét Sân',
+                            };
+                          });
+                          notifySync('Đã khôi phục vị trí Khu vực Quét sân mặc định (Nâng lên 25px, Y: 85.4%..92.4%)!');
+                        }}
+                        className="px-3 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/40 text-xs font-bold cursor-pointer"
+                      >
+                        ↺ Khôi Phục Vị Trí Quét Sân Mặc Định (-25px)
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-stone-300 font-semibold">Vị trí ngang X Khu Quét Sân (%):</span>
+                          <span className="text-amber-300 font-mono font-bold">
+                            {sweepRect.xMin.toFixed(1)}% ➔ {sweepRect.xMax.toFixed(1)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={6}
+                          max={76}
+                          step={0.5}
+                          value={sweepRect.xMin}
+                          onChange={e => {
+                            const newXMin = Number(e.target.value);
+                            updateAndSyncConfig(d => {
+                              d.sceneConfig.zones.sweeping_courtyard = {
+                                ...sweepRect,
+                                xMin: newXMin,
+                                xMax: Math.min(95, Number((newXMin + sweepWidth).toFixed(1))),
+                              };
+                            });
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+
+                      <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-stone-300 font-semibold">Vị trí dọc Y Khu Quét Sân (%):</span>
+                          <span className="text-amber-300 font-mono font-bold">
+                            {sweepRect.yMin.toFixed(1)}% ➔ {sweepRect.yMax.toFixed(1)}% ({Math.round((sweepRect.yMin / 100) * 960)}px)
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={68}
+                          max={89}
+                          step={0.2}
+                          value={sweepRect.yMin}
+                          onChange={e => {
+                            const newYMin = Number(e.target.value);
+                            updateAndSyncConfig(d => {
+                              d.sceneConfig.zones.sweeping_courtyard = {
+                                ...sweepRect,
+                                yMin: newYMin,
+                                yMax: Math.min(96, Number((newYMin + sweepHeight).toFixed(1))),
+                              };
+                            });
+                          }}
+                          className="w-full"
+                        />
+                      </label>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* C. BẢNG THÔNG BÁO, POPUP TỰ ẨN 4 GIÂY & OPACITY NỀN 0.4 */}
+            <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-amber-400 uppercase">
+                    📜 3. Bảng Thông Báo, Opacity Nền (0.4) & Tự Động Ẩn Popup (4 Giây)
+                  </div>
+                  <div className="text-[11px] text-stone-400">
+                    Chỉ giảm Opacity của lớp nền <code>rgba(..., {(config.overlayConfig.panelBgOpacity ?? 0.4).toFixed(2)})</code>, giữ chữ & icon sắc nét 100%.
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    updateAndSyncConfig(d => {
+                      d.overlayConfig.panelBgOpacity = 0.4;
+                      d.overlayConfig.popupDurationMs = 4000;
+                      d.overlayConfig.popupFadeOutMs = 700;
+                      d.overlayConfig.autoHidePopups = true;
+                    });
+                    notifySync('Đã khôi phục chuẩn: Opacity nền = 0.4, Popup hiển thị 4.0s, Fade-out 0.7s!');
+                  }}
+                  className="px-3 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/40 text-xs font-bold cursor-pointer"
+                >
+                  ↺ Khôi Phục Chuẩn (Opacity 0.4 • Tự Ẩn 4s)
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-stone-300 font-semibold">Opacity nền bảng (Chuẩn: 0.40):</span>
+                    <span className="text-amber-300 font-mono font-bold">
+                      {(config.overlayConfig.panelBgOpacity ?? 0.4).toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={0.95}
+                    step={0.05}
+                    value={config.overlayConfig.panelBgOpacity ?? 0.4}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.panelBgOpacity = Number(e.target.value);
+                      })
+                    }
+                    className="w-full"
+                  />
+                </label>
+
+                <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-stone-300 font-semibold">Thời gian hiện Popup (Chuẩn: 4.0s):</span>
+                    <span className="text-amber-300 font-mono font-bold">
+                      {((config.overlayConfig.popupDurationMs || 4000) / 1000).toFixed(1)}s ({config.overlayConfig.popupDurationMs || 4000}ms)
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1500}
+                    max={10000}
+                    step={500}
+                    value={config.overlayConfig.popupDurationMs || 4000}
+                    onChange={e => {
+                      const val = Number(e.target.value);
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.popupDurationMs = val;
+                        d.noticePanels.forEach(p => {
+                          if (p.durationMs > 0) p.durationMs = val;
+                        });
+                      });
+                    }}
+                    className="w-full"
+                  />
+                </label>
+
+                <label className="block p-2.5 rounded bg-stone-950 border border-stone-800">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-stone-300 font-semibold">Thời gian Fade-Out (Chuẩn: 0.7s):</span>
+                    <span className="text-amber-300 font-mono font-bold">
+                      {((config.overlayConfig.popupFadeOutMs || 700) / 1000).toFixed(1)}s ({config.overlayConfig.popupFadeOutMs || 700}ms)
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={200}
+                    max={2000}
+                    step={100}
+                    value={config.overlayConfig.popupFadeOutMs || 700}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.popupFadeOutMs = Number(e.target.value);
+                      })
+                    }
+                    className="w-full"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                <label className="flex items-center justify-between p-2 rounded bg-stone-950 border border-amber-500/30 cursor-pointer">
+                  <span className="text-amber-200 font-semibold">⏱️ Tự ẩn Popup tạm thời sau 4s</span>
+                  <input
+                    type="checkbox"
+                    checked={config.overlayConfig.autoHidePopups !== false}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.autoHidePopups = e.target.checked;
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded bg-stone-950 border border-stone-800 cursor-pointer">
+                  <span className="text-stone-200">🏆 Hiện Bảng TRƯỞNG LÃO (Cố định)</span>
+                  <input
+                    type="checkbox"
+                    checked={config.overlayConfig.showElderLeaderboard}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.showElderLeaderboard = e.target.checked;
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded bg-stone-950 border border-stone-800 cursor-pointer">
+                  <span className="text-stone-200">🎁 Hiện Bảng PHONG CẤP (Cố định)</span>
+                  <input
+                    type="checkbox"
+                    checked={config.overlayConfig.showGiftRankTable}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.showGiftRankTable = e.target.checked;
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded bg-stone-950 border border-stone-800 cursor-pointer">
+                  <span className="text-stone-200">📜 Hiện Thánh Chỉ Giáo Chủ</span>
+                  <input
+                    type="checkbox"
+                    checked={config.overlayConfig.showSectLeaderSpeechBubble}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.showSectLeaderSpeechBubble = e.target.checked;
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded bg-stone-950 border border-stone-800 cursor-pointer">
+                  <span className="text-stone-200">🧹 Hiện Bảng Phạt Quét Sân</span>
+                  <input
+                    type="checkbox"
+                    checked={config.overlayConfig.showSweepingPenaltyPanel}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.showSweepingPenaltyPanel = e.target.checked;
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded bg-stone-950 border border-stone-800 cursor-pointer">
+                  <span className="text-stone-200">🐉 Hiện Thanh Tiêu Đề Trên Cùng</span>
+                  <input
+                    type="checkbox"
+                    checked={config.overlayConfig.showHeaderBanner}
+                    onChange={e =>
+                      updateAndSyncConfig(d => {
+                        d.overlayConfig.showHeaderBanner = e.target.checked;
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    const target = selectedDisciple || disciples[0];
+                    const evt: TikTokLiveEvent = {
+                      id: `preview_promo_${Date.now()}`,
+                      type: 'gift',
+                      timestamp: Date.now(),
+                      userId: target?.userId || 'preview_hero',
+                      uniqueId: target?.uniqueId || 'preview_hero',
+                      nickname: target?.displayName || 'Lệnh Hồ Xung',
+                      coinValue: 20,
+                      giftName: 'Thánh Hỏa Lệnh (Test Popup 4s)',
+                      giftCount: 1,
+                      isDemo: true,
+                    };
+                    sectGameManager.handleGiftEvent(evt);
+                    notifySync('Đã bật Popup Thăng Cấp — Quan sát hiệu ứng tự mờ dần (0.7s) và biến mất sau 4 giây!');
+                  }}
+                  className="px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-bold text-xs cursor-pointer"
+                >
+                  ✨ Test Hiện Popup Thăng Cấp (Tự Ẩn Sau 4 Giây)
+                </button>
+                <button
+                  onClick={() => {
+                    sectGameManager.triggerSectLeaderSpeech('silly_evil_boast', {}, 'boast_idle');
+                    notifySync('Đã bật Popup Thánh Chỉ Giáo Chủ — Tự ẩn sau 4 giây!');
+                  }}
+                  className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-black font-bold text-xs cursor-pointer"
+                >
+                  📜 Test Hiện Popup Thánh Chỉ Giáo Chủ (Tự Ẩn Sau 4 Giây)
+                </button>
+              </div>
+            </div>
+
+            {/* D. TỶ LỆ KHUNG HÌNH 9:16 & CUSTOM CSS */}
             <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/30 space-y-3 tabular-nums">
-              <div className="font-bold text-amber-400 uppercase">🎨 Tinh Chỉnh Tỷ Lệ 9:16 & Custom CSS</div>
+              <div className="font-bold text-amber-400 uppercase">🎨 4. Tinh Chỉnh Tỷ Lệ 9:16 & Custom CSS</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-stone-400">Tỷ lệ HUD (hudScale): {config.overlayConfig.hudScale.toFixed(2)}x</span>
@@ -3321,6 +4233,183 @@ export const AdminControlCenter: React.FC<AdminControlCenterProps> = ({
                     className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 cursor-pointer"
                   >
                     🎺 Nhạc Đăng Cơ Giáo Chủ
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* PANEL C: KIỂM THỬ THỜI GIAN Ở LẠI & TỰ ĐỘNG RỜI SẢNH (TEST NHANH 5s / 10s / 15s / 30s) */}
+            <div className="p-3 rounded-lg bg-stone-900 border border-amber-500/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-amber-400 uppercase">
+                    ⏱️ Kiểm Thử Thời Gian Ở Lại & Tự Động Rời Sảnh (Test Nhanh 5s – 30s & Bảo Lưu Cấp Bậc)
+                  </div>
+                  <div className="text-[11px] text-stone-400">
+                    Đang cấu hình: <strong className="text-amber-300">{config.stayDurationConfig?.inactivityTimeoutSec || 420}s ({config.stayDurationConfig?.inactivityTimeoutMinutes || 7} phút)</strong> • Cảnh báo trước: {config.stayDurationConfig?.warningBeforeDepartSec || 30}s • Đi ra cổng: {config.stayDurationConfig?.walkToGateOnDepart ? `${config.stayDurationConfig?.departAnimationDurationSec || 4}s` : 'TẮT'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleResetStayConfig()}
+                  className="px-3 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-xs font-bold cursor-pointer"
+                >
+                  ↺ Khôi Phục Chuẩn 7 Phút (420s)
+                </button>
+              </div>
+
+              {/* 1. Đặt thời gian rời sảnh ngắn để test nhanh (5s, 10s, 15s, 30s) */}
+              <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-2">
+                <div className="text-amber-300 font-bold text-[11px]">
+                  1. Đặt thời gian rời sảnh ngắn để kiểm thử nhanh (Áp dụng ngay cho toàn sảnh):
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { sec: 5, warn: 3, label: '⚡ Test Nhanh 5 Giây' },
+                    { sec: 10, warn: 4, label: '⚡ Test Nhanh 10 Giây' },
+                    { sec: 15, warn: 5, label: '⚡ Test Nhanh 15 Giây' },
+                    { sec: 30, warn: 10, label: '⚡ Test Nhanh 30 Giây' },
+                  ].map(preset => (
+                    <button
+                      key={`fast_timeout_${preset.sec}`}
+                      onClick={() => {
+                        handleSaveStayConfig({
+                          inactivityTimeoutSec: preset.sec,
+                          inactivityTimeoutMinutes: 1,
+                          warningBeforeDepartEnabled: true,
+                          warningBeforeDepartSec: preset.warn,
+                          autoDepartEnabled: true,
+                          walkToGateOnDepart: true,
+                          departAnimationDurationSec: 3,
+                          applyMode: 'immediate',
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded font-bold cursor-pointer ${
+                        config.stayDurationConfig?.inactivityTimeoutSec === preset.sec
+                          ? 'bg-amber-500 text-black'
+                          : 'bg-stone-800 hover:bg-stone-700 text-amber-200 border border-stone-700'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Tua nhanh thời gian trôi qua để kiểm tra Cảnh Báo & Đi Ra Cổng Rời Sảnh tức thì */}
+              <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-2">
+                <div className="text-sky-300 font-bold text-[11px]">
+                  2. Giả lập trôi thời gian không tương tác (Test cảnh báo sắp hết giờ & nhân vật đi bộ ra cổng rời sảnh):
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[10, 30, 60, 180, 420].map(sec => (
+                    <button
+                      key={`sim_elapsed_${sec}`}
+                      onClick={() => {
+                        sectGameManager.simulateTimeElapsed(sec);
+                        liveConnectionManager.emitAdminCommand({
+                          action: 'simulate_time_elapsed',
+                          seconds: sec,
+                        });
+                        notifySync(`Đã tua nhanh +${sec}s không tương tác cho toàn bộ người chơi trong sảnh!`);
+                      }}
+                      className="px-3 py-1.5 rounded bg-sky-800 hover:bg-sky-700 text-white font-bold cursor-pointer"
+                    >
+                      ⏩ Tua Nhanh +{sec}s {sec === 420 ? '(Đủ 7 Phút Rời Sảnh)' : ''}
+                    </button>
+                  ))}
+                  {selectedDisciple && (
+                    <button
+                      onClick={() => {
+                        const timeoutSec = config.stayDurationConfig?.inactivityTimeoutSec || 420;
+                        sectGameManager.simulateTimeElapsed(timeoutSec + 5, selectedDisciple.userId);
+                        liveConnectionManager.emitAdminCommand({
+                          action: 'simulate_time_elapsed',
+                          seconds: timeoutSec + 5,
+                          userId: selectedDisciple.userId,
+                        });
+                        notifySync(`Đã cho riêng ${selectedDisciple.displayName} hết thời gian và đi bộ ra cổng!`);
+                      }}
+                      className="px-3 py-1.5 rounded bg-red-800 hover:bg-red-700 text-white font-bold cursor-pointer"
+                    >
+                      🚪 Cho "{selectedDisciple.displayName}" Hết Giờ & Rời Sảnh Ngay
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Kịch bản kiểm thử tự động: Rời sảnh rồi bình luận quay lại vẫn giữ nguyên Cấp Bậc & Tổng Xu */}
+              <div className="p-2.5 rounded bg-stone-950 border border-stone-800 space-y-2">
+                <div className="text-emerald-300 font-bold text-[11px]">
+                  3. Kiểm thử kịch bản thực tế (Làm mới bộ đếm • Tự múa không kéo dài giờ • Rời sảnh quay lại giữ nguyên Cấp Bậc & Xu):
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      const uid = 'test_return_hero';
+                      const name = 'Trương Vô Kỵ';
+                      // Bước 1: Tạo User & tặng 50 xu lên Hộ Pháp Ma Giáo
+                      sectGameManager.handleCommentEvent({
+                        id: `ret_c1_${Date.now()}`,
+                        type: 'comment',
+                        timestamp: Date.now(),
+                        userId: uid,
+                        uniqueId: uid,
+                        nickname: name,
+                        comment: 'Bái kiến Giáo Chủ!',
+                        isDemo: true,
+                      });
+                      sectGameManager.handleGiftEvent({
+                        id: `ret_g1_${Date.now()}`,
+                        type: 'gift',
+                        timestamp: Date.now(),
+                        userId: uid,
+                        uniqueId: uid,
+                        nickname: name,
+                        coinValue: 50,
+                        giftName: 'Hộ Pháp Lệnh',
+                        giftCount: 1,
+                        isDemo: true,
+                      });
+                      // Bước 2: Cho hết giờ rời sảnh ngay
+                      const prevWalk = config.stayDurationConfig?.walkToGateOnDepart;
+                      sectGameManager.setStayDurationConfig({ walkToGateOnDepart: false });
+                      sectGameManager.simulateTimeElapsed(9999, uid);
+                      sectGameManager.setStayDurationConfig({ walkToGateOnDepart: prevWalk ?? true });
+                      // Bước 3: Bình luận quay lại sảnh -> Kiểm tra giữ nguyên 50 xu & Hộ Pháp Ma Giáo
+                      const res = sectGameManager.handleCommentEvent({
+                        id: `ret_c2_${Date.now() + 1}`,
+                        type: 'comment',
+                        timestamp: Date.now() + 1,
+                        userId: uid,
+                        uniqueId: uid,
+                        nickname: name,
+                        comment: 'Đệ tử đã quay lại đại điện!',
+                        isDemo: true,
+                      });
+                      onSelectDiscipleId(uid);
+                      notifySync(
+                        `✓ Kịch bản hoàn tất: ${name} rời sảnh rồi bình luận quay lại vẫn giữ nguyên ${res.disciple?.totalCoins} xu & chức danh [${res.disciple?.rankName}]!`
+                      );
+                    }}
+                    className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-bold cursor-pointer"
+                  >
+                    🔄 Test Rời Sảnh Rồi Quay Lại Giữ Nguyên 50 Xu & Chức Danh
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!selectedDisciple) return;
+                      const beforeSec = selectedDisciple.remainingStaySec;
+                      sectGameManager.triggerMassPlayerAnimation('combo_kungfu');
+                      const afterSnap = sectGameManager.getSnapshot();
+                      const afterUser = afterSnap.disciples.find(d => d.userId === selectedDisciple.userId);
+                      notifySync(
+                        `✓ Đã phát hoạt ảnh tự múa võ: Thời gian còn lại của ${selectedDisciple.displayName} giữ nguyên (${beforeSec}s ➔ ${afterUser?.remainingStaySec}s), KHÔNG bị cộng thêm giờ!`
+                      );
+                    }}
+                    className="px-3 py-1.5 rounded bg-purple-800 hover:bg-purple-700 text-white font-bold cursor-pointer"
+                  >
+                    🧘 Kiểm Chứng Tự Múa Võ Không Làm Mới Bộ Đếm
                   </button>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import {
   CommentCommandConfig,
   CommentSystemSettings,
   DialogueLineConfig,
+  DiscipleStayDurationConfig,
   GiftMappingConfig,
   MaGiaoMasterConfig,
   MiniGameConfig,
@@ -23,7 +24,8 @@ export const DEFAULT_SECT_LEADER_CONFIG: SectLeaderConfig = {
   formerLeaderTitle: 'Thái Thượng Giáo Chủ',
   personality: 'hai_huoc',
   scale: 1.45,
-  thronePosition: { x: 50, y: 19 },
+  // Hạ ngai Giáo Chủ xuống 30px trên màn hình dọc 9:16 (540x960): 19% + (30/960)*100% = 22.13%
+  thronePosition: { x: 50, y: 22.13 },
   autoIdleEnabled: true,
   idleActionIntervalRangeSec: [15, 35],
   patrolEnabled: true,
@@ -771,26 +773,27 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   freeRoamBounds: {
     xMin: 10,
     xMax: 90,
-    yMin: 31,
+    yMin: 33.5,
     yMax: 90,
     label: 'Vùng Sinh Hoạt Tự Do Toàn Đại Điện (FreeRoamArea)',
   },
   throneReservedZone: {
     xMin: 28,
     xMax: 72,
-    yMin: 10,
-    yMax: 29.5,
+    yMin: 13.1,
+    yMax: 32.6,
     label: 'Vùng Bảo Vệ Ngai Vàng Giáo Chủ',
   },
   zones: {
-    throne_zone: { xMin: 40, xMax: 60, yMin: 15, yMax: 24, label: 'Ngai Vàng Chính Điện' },
-    co_leader_dais: { xMin: 72, xMax: 88, yMin: 19, yMax: 26, label: 'Đài Đồng Tôn Giáo Chủ (199 Xu)' },
-    central_aisle: { xMin: 30, xMax: 70, yMin: 31, yMax: 90, label: 'Lối Đi Chính Giữa Đại Điện (Trung Tâm)' },
-    left_disciple_wing: { xMin: 10, xMax: 42, yMin: 32, yMax: 88, label: 'Không Gian Cánh Tả & Trung Tâm' },
-    right_disciple_wing: { xMin: 58, xMax: 90, yMin: 32, yMax: 88, label: 'Không Gian Cánh Hữu & Trung Tâm' },
-    meditation_area: { xMin: 14, xMax: 86, yMin: 34, yMax: 88, label: 'Không Gian Thiền Định Tự Do' },
-    martial_practice_area: { xMin: 14, xMax: 86, yMin: 33, yMax: 88, label: 'Không Gian Luyện Võ Giữa Sảnh' },
-    sweeping_courtyard: { xMin: 73, xMax: 94, yMin: 88, yMax: 95, label: 'Góc Phạt Quét Sân' },
+    throne_zone: { xMin: 40, xMax: 60, yMin: 18.1, yMax: 27.1, label: 'Ngai Vàng Chính Điện' },
+    co_leader_dais: { xMin: 72, xMax: 88, yMin: 22.1, yMax: 29.1, label: 'Đài Đồng Tôn Giáo Chủ (199 Xu)' },
+    central_aisle: { xMin: 30, xMax: 70, yMin: 33.5, yMax: 90, label: 'Lối Đi Chính Giữa Đại Điện (Trung Tâm)' },
+    left_disciple_wing: { xMin: 10, xMax: 42, yMin: 33.5, yMax: 88, label: 'Không Gian Cánh Tả & Trung Tâm' },
+    right_disciple_wing: { xMin: 58, xMax: 90, yMin: 33.5, yMax: 88, label: 'Không Gian Cánh Hữu & Trung Tâm' },
+    meditation_area: { xMin: 14, xMax: 86, yMin: 35, yMax: 88, label: 'Không Gian Thiền Định Tự Do' },
+    martial_practice_area: { xMin: 14, xMax: 86, yMin: 34, yMax: 88, label: 'Không Gian Luyện Võ Giữa Sảnh' },
+    // Nâng khu vực Quét Sân lên 25px trên màn hình dọc 9:16 (540x960): -(25/960)*100% = -2.6% (88..95 -> 85.4..92.4)
+    sweeping_courtyard: { xMin: 73, xMax: 94, yMin: 85.4, yMax: 92.4, label: 'Góc Phạt Quét Sân' },
     entry_gate: { xMin: 40, xMax: 60, yMin: 92, yMax: 97, label: 'Cổng Sơn Trang Ma Giáo' },
   },
 };
@@ -807,18 +810,96 @@ export const DEFAULT_PLAYER_ANIMATION_CONFIG: PlayerAnimationConfig = {
   meditateWeight: 16,
   greetLeaderWeight: 10,
   socialWeight: 14,
-  idleTimeoutSec: 300,
+  idleTimeoutSec: 420,
 };
+
+export const DEFAULT_STAY_DURATION_CONFIG: DiscipleStayDurationConfig = {
+  inactivityTimeoutMinutes: 7,
+  inactivityTimeoutSec: 420,
+  autoDepartEnabled: true,
+  walkToGateOnDepart: true,
+  departAnimationDurationSec: 4,
+  warningBeforeDepartEnabled: true,
+  warningBeforeDepartSec: 30,
+  applyMode: 'immediate',
+  isTestShortTimeout: false,
+};
+
+export function sanitizeStayDurationConfig(
+  raw?: Partial<DiscipleStayDurationConfig>,
+  current: DiscipleStayDurationConfig = DEFAULT_STAY_DURATION_CONFIG
+): DiscipleStayDurationConfig {
+  const base = { ...DEFAULT_STAY_DURATION_CONFIG, ...current };
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
+
+  let isTestShortTimeout =
+    raw.isTestShortTimeout !== undefined ? Boolean(raw.isTestShortTimeout) : Boolean(base.isTestShortTimeout);
+
+  let inactivityTimeoutMinutes = base.inactivityTimeoutMinutes;
+  let inactivityTimeoutSec = base.inactivityTimeoutSec;
+
+  const hasExplicitSec =
+    typeof raw.inactivityTimeoutSec === 'number' && Number.isFinite(raw.inactivityTimeoutSec);
+  const hasExplicitMin =
+    typeof raw.inactivityTimeoutMinutes === 'number' && Number.isFinite(raw.inactivityTimeoutMinutes);
+
+  if (hasExplicitSec && (raw.inactivityTimeoutSec! < 60 || raw.isTestShortTimeout)) {
+    inactivityTimeoutSec = Math.max(2, Math.min(1800, Math.round(raw.inactivityTimeoutSec!)));
+    inactivityTimeoutMinutes = Math.max(1, Math.min(30, Math.round(inactivityTimeoutSec / 60) || 1));
+    isTestShortTimeout = inactivityTimeoutSec < 60;
+  } else if (hasExplicitMin && (!hasExplicitSec || raw.inactivityTimeoutSec === raw.inactivityTimeoutMinutes! * 60)) {
+    inactivityTimeoutMinutes = Math.max(1, Math.min(30, Math.round(raw.inactivityTimeoutMinutes!)));
+    inactivityTimeoutSec = inactivityTimeoutMinutes * 60;
+    isTestShortTimeout = false;
+  } else if (hasExplicitSec) {
+    const mins = Math.max(1, Math.min(30, Math.round(raw.inactivityTimeoutSec! / 60)));
+    inactivityTimeoutMinutes = mins;
+    inactivityTimeoutSec = mins * 60;
+    isTestShortTimeout = false;
+  }
+
+  const departAnimationDurationSec =
+    typeof raw.departAnimationDurationSec === 'number' && Number.isFinite(raw.departAnimationDurationSec)
+      ? Math.max(1, Math.min(15, Math.round(raw.departAnimationDurationSec)))
+      : base.departAnimationDurationSec;
+
+  const warningBeforeDepartSec =
+    typeof raw.warningBeforeDepartSec === 'number' && Number.isFinite(raw.warningBeforeDepartSec)
+      ? Math.max(1, Math.min(300, Math.round(raw.warningBeforeDepartSec)))
+      : base.warningBeforeDepartSec;
+
+  const applyMode =
+    raw.applyMode === 'new_only' || raw.applyMode === 'immediate' ? raw.applyMode : base.applyMode;
+
+  return {
+    inactivityTimeoutMinutes,
+    inactivityTimeoutSec,
+    autoDepartEnabled:
+      raw.autoDepartEnabled !== undefined ? Boolean(raw.autoDepartEnabled) : base.autoDepartEnabled,
+    walkToGateOnDepart:
+      raw.walkToGateOnDepart !== undefined ? Boolean(raw.walkToGateOnDepart) : base.walkToGateOnDepart,
+    departAnimationDurationSec,
+    warningBeforeDepartEnabled:
+      raw.warningBeforeDepartEnabled !== undefined
+        ? Boolean(raw.warningBeforeDepartEnabled)
+        : base.warningBeforeDepartEnabled,
+    warningBeforeDepartSec,
+    applyMode,
+    isTestShortTimeout,
+  };
+}
 
 export const DEFAULT_NOTICE_PANELS: NoticePanelConfig[] = [
   { id: 'gift_rank_table', title: '1. Bảng Lễ Vật & Cấp Bậc Ma Giáo', enabled: true, position: 'top-right', durationMs: 0, priority: 5 },
   { id: 'elder_leaderboard', title: '2. Bảng Vàng 4 Đại Trưởng Lão', enabled: true, position: 'top-left', durationMs: 0, priority: 6 },
-  { id: 'promotion_banner', title: '3. Thông Báo Sắc Phong Cấp Bậc', enabled: true, position: 'center', durationMs: 6500, priority: 8 },
-  { id: 'throne_transfer_banner', title: '4. Đại Lễ Đăng Cơ Tân Giáo Chủ', enabled: true, position: 'center', durationMs: 9000, priority: 10 },
+  { id: 'promotion_banner', title: '3. Thông Báo Sắc Phong Cấp Bậc', enabled: true, position: 'center-bottom', durationMs: 4000, priority: 8 },
+  { id: 'throne_transfer_banner', title: '4. Đại Lễ Đăng Cơ Tân Giáo Chủ', enabled: true, position: 'center-bottom', durationMs: 4000, priority: 10 },
   { id: 'minigame_hud', title: '5. Bảng Điều Hành Mini Game Luyện Võ', enabled: true, position: 'center-bottom', durationMs: 0, priority: 9 },
-  { id: 'minigame_result', title: '6. Bảng Kết Quả Thắng/Thua Mini Game', enabled: true, position: 'center', durationMs: 5000, priority: 9 },
+  { id: 'minigame_result', title: '6. Bảng Kết Quả Thắng/Thua Mini Game', enabled: true, position: 'center-bottom', durationMs: 4000, priority: 9 },
   { id: 'sweeping_list', title: '7. Danh Sách 5 Đệ Tử Đang Quét Sân', enabled: true, position: 'bottom-right', durationMs: 0, priority: 7 },
-  { id: 'sect_leader_speech', title: '8. Thánh Chỉ Lời Phán Giáo Chủ', enabled: true, position: 'top-center', durationMs: 6000, priority: 8 },
+  { id: 'sect_leader_speech', title: '8. Thánh Chỉ Lời Phán Giáo Chủ', enabled: true, position: 'top-center', durationMs: 4000, priority: 8 },
 ];
 
 export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
@@ -827,6 +908,10 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   sectLeaderScale: 1.0,
   nameplateScale: 1.0,
   bubbleScale: 1.0,
+  panelBgOpacity: 0.4,
+  popupDurationMs: 4000,
+  popupFadeOutMs: 700,
+  autoHidePopups: true,
   showHeaderBanner: true,
   showElderLeaderboard: true,
   showGiftRankTable: true,
@@ -850,6 +935,7 @@ export function createDefaultMasterConfig(dialogues: DialogueLineConfig[] = []):
     voiceConfig: structuredClone(DEFAULT_VOICE_CONFIG),
     sceneConfig: structuredClone(DEFAULT_SCENE_CONFIG),
     playerAnimationConfig: structuredClone(DEFAULT_PLAYER_ANIMATION_CONFIG),
+    stayDurationConfig: structuredClone(DEFAULT_STAY_DURATION_CONFIG),
     miniGames: structuredClone(DEFAULT_MINI_GAMES),
     sceneTransition: structuredClone(DEFAULT_SCENE_TRANSITION),
     noticePanels: structuredClone(DEFAULT_NOTICE_PANELS),

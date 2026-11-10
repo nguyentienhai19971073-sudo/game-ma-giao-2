@@ -15,6 +15,7 @@ interface MaGiao2DCanvasProps {
   miniGame: MiniGameActiveState;
   sceneConfig: SceneConfig;
   overlayConfig: OverlayConfig;
+  thronePosition?: { x: number; y: number };
   minSeparationDist?: number;
   onSelectDisciple?: (disciple: SectDisciple) => void;
   selectedDiscipleId?: string | null;
@@ -38,6 +39,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
   miniGame,
   sceneConfig,
   overlayConfig,
+  thronePosition,
   minSeparationDist = 5.2,
   onSelectDisciple,
   selectedDiscipleId,
@@ -50,6 +52,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
     miniGame,
     sceneConfig,
     overlayConfig,
+    thronePosition,
     minSeparationDist,
     selectedDiscipleId,
   });
@@ -62,6 +65,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
       miniGame,
       sceneConfig,
       overlayConfig,
+      thronePosition,
       minSeparationDist,
       selectedDiscipleId,
     };
@@ -72,6 +76,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
     miniGame,
     sceneConfig,
     overlayConfig,
+    thronePosition,
     minSeparationDist,
     selectedDiscipleId,
   ]);
@@ -102,6 +107,7 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
         miniGame: mg,
         sceneConfig: sCfg,
         overlayConfig: oCfg,
+        thronePosition: thronePosProp,
         minSeparationDist: minSep,
         selectedDiscipleId: selId,
       } = stateRef.current;
@@ -110,13 +116,22 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
       const H = canvas.height;
       const t = timeMs * 0.001;
 
+      // Resolve Throne Position (default x: 50%, y: 22.13% = lowered by 30px from 19% on 960px canvas)
+      const throneZone = sCfg.zones?.throne_zone;
+      const resolvedThronePos = thronePosProp || {
+        x: throneZone ? (throneZone.xMin + throneZone.xMax) * 0.5 : 50,
+        y: throneZone ? throneZone.yMin + 4.03 : 22.13,
+      };
+      const throneDxPx = ((resolvedThronePos.x - 50) / 100) * W;
+      const throneDyPx = ((resolvedThronePos.y - 19) / 100) * H; // +30px at y=22.13%
+
       ctx.clearRect(0, 0, W, H);
 
       // 1. Draw Background Architecture (Đại Điện Ma Giáo or Sân Luyện Võ)
       if (curScene === 'main_hall') {
-        drawMainHallEnvironment(ctx, W, H, t, sCfg);
+        drawMainHallEnvironment(ctx, W, H, t, sCfg, throneDxPx, throneDyPx);
       } else {
-        drawTrainingGroundEnvironment(ctx, W, H, t, sCfg, mg);
+        drawTrainingGroundEnvironment(ctx, W, H, t, sCfg, mg, throneDxPx, throneDyPx);
       }
 
       // 2. Optional Debug Zone Overlay (Admin Inspection Mode)
@@ -124,13 +139,19 @@ export const MaGiao2DCanvas: React.FC<MaGiao2DCanvasProps> = ({
         drawDebugZonesOverlay(ctx, W, H, sCfg, list, minSep);
       }
 
-      // 3. Draw Guardian NPCs (Tả / Hữu Hộ Pháp) flanking the Throne platform
-      drawGuardianNPC(ctx, W * 0.31, H * 0.24, 'left', t);
-      drawGuardianNPC(ctx, W * 0.69, H * 0.24, 'right', t);
+      // 3. Draw Guardian NPCs (Tả / Hữu Hộ Pháp) flanking the Throne platform (synchronized with Throne offset)
+      drawGuardianNPC(ctx, W * 0.31 + throneDxPx, H * 0.24 + throneDyPx, 'left', t);
+      drawGuardianNPC(ctx, W * 0.69 + throneDxPx, H * 0.24 + throneDyPx, 'right', t);
 
-      // 4. If a player has taken over the Throne, draw Thái Thượng Giáo Chủ on the right elder dais
+      // 4. If a player has taken over the Throne, draw Thái Thượng Giáo Chủ on the elder dais
       if (leader.hasCustomPlayerLeader) {
-        drawThaiThuongGiaoChu(ctx, W * 0.78, H * 0.22, t, leader.formerLeaderName);
+        drawThaiThuongGiaoChu(
+          ctx,
+          W * 0.22 + throneDxPx,
+          H * 0.22 + throneDyPx,
+          t,
+          leader.formerLeaderName
+        );
       }
 
       // 5. Draw Sect Leader (Giáo Chủ Dạ Thiên Minh / Tân Giáo Chủ) with 35 animations + lip-sync
@@ -212,7 +233,9 @@ function drawMainHallEnvironment(
   W: number,
   H: number,
   t: number,
-  sCfg: SceneConfig
+  sCfg: SceneConfig,
+  throneDxPx: number,
+  throneDyPx: number
 ) {
   // Deep obsidian-crimson sanctuary gradient
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
@@ -223,10 +246,11 @@ function drawMainHallEnvironment(
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // Open Grand Hall Stone Floor Tiles (from y = 28% down to 94%)
-  const floorTopY = H * 0.28;
+  // Open Grand Hall Stone Floor Tiles (from below the Throne steps down to 93%)
+  const floorTopY = Math.min(H * 0.36, Math.max(H * 0.25, H * 0.28 + throneDyPx));
+  const floorHeight = Math.max(H * 0.55, H * 0.93 - floorTopY);
   ctx.fillStyle = 'rgba(22, 13, 29, 0.85)';
-  ctx.fillRect(W * 0.06, floorTopY, W * 0.88, H * 0.65);
+  ctx.fillRect(W * 0.06, floorTopY, W * 0.88, floorHeight);
 
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.08)';
   ctx.lineWidth = 1;
@@ -243,9 +267,9 @@ function drawMainHallEnvironment(
     ctx.stroke();
   }
 
-  // Giant Ma Giáo Sacred Emblem behind the Throne
+  // Giant Ma Giáo Sacred Emblem behind the Throne (shifted synchronously with Throne)
   ctx.save();
-  ctx.translate(W * 0.5, H * 0.13);
+  ctx.translate(W * 0.5 + throneDxPx, H * 0.13 + throneDyPx);
   ctx.rotate(Math.sin(t * 0.4) * 0.04);
   const auraGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 95);
   auraGrad.addColorStop(0, 'rgba(220, 38, 38, 0.36)');
@@ -275,14 +299,14 @@ function drawMainHallEnvironment(
   ctx.stroke();
   ctx.restore();
 
-  // Elevated Imperial Steps & Throne Dais (Top Center: y = 14%..28%)
+  // Elevated Imperial Steps & Throne Dais (shifted down by +30px with Throne)
   ctx.fillStyle = '#1C0D18';
   ctx.strokeStyle = '#D4AF37';
   ctx.lineWidth = 1.6;
-  ctx.fillRect(W * 0.26, H * 0.14, W * 0.48, H * 0.14);
-  ctx.strokeRect(W * 0.26, H * 0.14, W * 0.48, H * 0.14);
+  ctx.fillRect(W * 0.26 + throneDxPx, H * 0.14 + throneDyPx, W * 0.48, H * 0.14);
+  ctx.strokeRect(W * 0.26 + throneDxPx, H * 0.14 + throneDyPx, W * 0.48, H * 0.14);
 
-  // WIDE CENTRAL AISLE (LỐI ĐI CHÍNH GIỮA: x = 32%..68%, y = 28%..93%)
+  // WIDE CENTRAL AISLE (LỐI ĐI CHÍNH GIỮA: x = 32%..68%)
   // Designed as the centerpiece open activity floor of the Đại Điện!
   const aisleX = W * 0.32;
   const aisleW = W * 0.36;
@@ -293,19 +317,19 @@ function drawMainHallEnvironment(
   carpetGrad.addColorStop(0.85, 'rgba(127, 17, 30, 0.85)');
   carpetGrad.addColorStop(1, 'rgba(92, 11, 22, 0.78)');
   ctx.fillStyle = carpetGrad;
-  ctx.fillRect(aisleX, floorTopY, aisleW, H * 0.65);
+  ctx.fillRect(aisleX, floorTopY, aisleW, floorHeight);
 
   // Double Golden Dragon Borders along the Wide Central Aisle
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.62)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(aisleX + 2, floorTopY, aisleW - 4, H * 0.65);
+  ctx.strokeRect(aisleX + 2, floorTopY, aisleW - 4, floorHeight);
   ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(aisleX + 8, floorTopY + 6, aisleW - 16, H * 0.65 - 12);
+  ctx.strokeRect(aisleX + 8, floorTopY + 6, aisleW - 16, floorHeight - 12);
 
-  // Grand Center Hall Martial Medallion Inlay (Right in the middle of the Central Aisle: x=50%, y=58%)
+  // Grand Center Hall Martial Medallion Inlay (Right in the middle of the Central Aisle: x=50%, y=60%)
   ctx.save();
-  ctx.translate(W * 0.5, H * 0.58);
+  ctx.translate(W * 0.5, H * 0.60);
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.28)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -325,33 +349,47 @@ function drawMainHallEnvironment(
   ctx.save();
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.16)';
   ctx.setLineDash([6, 6]);
-  ctx.strokeRect(W * 0.08, H * 0.31, W * 0.22, H * 0.50);
-  ctx.strokeRect(W * 0.70, H * 0.31, W * 0.22, H * 0.50);
+  ctx.strokeRect(W * 0.08, H * 0.335, W * 0.22, H * 0.475);
+  ctx.strokeRect(W * 0.70, H * 0.335, W * 0.22, H * 0.475);
   ctx.setLineDash([]);
   ctx.fillStyle = 'rgba(212, 175, 55, 0.26)';
   ctx.font = 'bold 8px "Cinzel", serif';
   ctx.textAlign = 'center';
-  ctx.fillText('TẢ VÕ ĐƯỜNG', W * 0.19, H * 0.33);
-  ctx.fillText('HỮU VÕ ĐƯỜNG', W * 0.81, H * 0.33);
+  ctx.fillText('TẢ VÕ ĐƯỜNG', W * 0.19, H * 0.355);
+  ctx.fillText('HỮU VÕ ĐƯỜNG', W * 0.81, H * 0.355);
   ctx.restore();
 
-  // Steps leading up from the Central Aisle to the Throne Platform
+  // Steps leading up from the Central Aisle to the Throne Platform (shifted with Throne)
   for (let s = 0; s < 4; s++) {
-    const sy = H * 0.262 + s * 5.5;
+    const sy = H * 0.262 + throneDyPx + s * 5.5;
     ctx.fillStyle = s % 2 === 0 ? '#2E1524' : '#3E1C30';
-    ctx.fillRect(W * 0.34, sy, W * 0.32, 5);
+    ctx.fillRect(W * 0.34 + throneDxPx, sy, W * 0.32, 5);
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.55)';
-    ctx.strokeRect(W * 0.34, sy, W * 0.32, 5);
+    ctx.strokeRect(W * 0.34 + throneDxPx, sy, W * 0.32, 5);
   }
 
-  // Grand Obsidian-Gold Dragon Throne
-  drawGrandThrone(ctx, W * 0.5, H * 0.19);
+  // Grand Obsidian-Gold Dragon Throne (shifted down +30px from H * 0.19 to H * 0.19 + throneDyPx)
+  drawGrandThrone(ctx, W * 0.5 + throneDxPx, H * 0.19 + throneDyPx);
 
-  // Co-Leader Dais (Đài Đồng Tôn Giáo Chủ - 199 Xu) on Upper Left of Throne
-  drawCoLeaderDais(ctx, W * 0.18, H * 0.23, t);
+  // Co-Leader Dais (Đài Đồng Tôn Giáo Chủ - 199 Xu) synchronized with co_leader_dais zone
+  const coDaisZone = sCfg.zones?.co_leader_dais;
+  const coDaisX = coDaisZone ? ((coDaisZone.xMin + coDaisZone.xMax) * 0.5 / 100) * W : W * 0.80 + throneDxPx;
+  const coDaisY = coDaisZone ? ((coDaisZone.yMin + coDaisZone.yMax) * 0.5 / 100) * H : H * 0.23 + throneDyPx;
+  drawCoLeaderDais(ctx, coDaisX, coDaisY, t);
 
-  // Dedicated Sweeping Courtyard Pad (Bottom-Left Corner: x = 8..25%, y = 84..92%)
-  drawZoneFloorPad(ctx, W * 0.08, H * 0.84, W * 0.18, H * 0.08, 'GÓC QUÉT SÂN', '#D97706');
+  // Dedicated Sweeping Courtyard Pad (raised by 25px = -2.6% Y, dynamically bound to sCfg.zones.sweeping_courtyard)
+  const sweepZone = sCfg.zones?.sweeping_courtyard || {
+    xMin: 73,
+    xMax: 94,
+    yMin: 85.4,
+    yMax: 92.4,
+    label: 'Góc Phạt Quét Sân',
+  };
+  const sweepX = (sweepZone.xMin / 100) * W;
+  const sweepY = (sweepZone.yMin / 100) * H;
+  const sweepW = Math.max(W * 0.16, ((sweepZone.xMax - sweepZone.xMin) / 100) * W);
+  const sweepH = Math.max(H * 0.065, ((sweepZone.yMax - sweepZone.yMin) / 100) * H);
+  drawZoneFloorPad(ctx, sweepX, sweepY, sweepW, sweepH, 'GÓC QUÉT SÂN', '#D97706');
 
   // Dragon Pillars on Outer Left & Right Walls
   if (sCfg.dragonPillars) {
@@ -475,8 +513,10 @@ function drawTrainingGroundEnvironment(
   W: number,
   H: number,
   t: number,
-  _sCfg: SceneConfig,
-  mg: MiniGameActiveState
+  sCfg: SceneConfig,
+  mg: MiniGameActiveState,
+  throneDxPx: number,
+  throneDyPx: number
 ) {
   // Twilight martial peak sky + stone arena
   const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
@@ -504,7 +544,7 @@ function drawTrainingGroundEnvironment(
 
   // Giant Martial Arts Taiji / Bagua Arena Circle in the center of the courtyard
   ctx.save();
-  ctx.translate(W * 0.5, H * 0.58);
+  ctx.translate(W * 0.5, H * 0.60);
   ctx.strokeStyle = 'rgba(212, 175, 55, 0.28)';
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -537,17 +577,31 @@ function drawTrainingGroundEnvironment(
   }
   ctx.restore();
 
-  // Command Platform for Sect Leader at top of Training Ground
+  // Command Platform for Sect Leader at top of Training Ground (shifted down +30px with Throne)
   ctx.fillStyle = '#1E1122';
   ctx.strokeStyle = '#D4AF37';
   ctx.lineWidth = 2;
-  ctx.fillRect(W * 0.24, H * 0.14, W * 0.52, H * 0.12);
-  ctx.strokeRect(W * 0.24, H * 0.14, W * 0.52, H * 0.12);
-  drawGrandThrone(ctx, W * 0.5, H * 0.19);
-  drawCoLeaderDais(ctx, W * 0.18, H * 0.23, t);
+  ctx.fillRect(W * 0.24 + throneDxPx, H * 0.14 + throneDyPx, W * 0.52, H * 0.12);
+  ctx.strokeRect(W * 0.24 + throneDxPx, H * 0.14 + throneDyPx, W * 0.52, H * 0.12);
+  drawGrandThrone(ctx, W * 0.5 + throneDxPx, H * 0.19 + throneDyPx);
+  const coDaisZone = sCfg.zones?.co_leader_dais;
+  const coDaisX = coDaisZone ? ((coDaisZone.xMin + coDaisZone.xMax) * 0.5 / 100) * W : W * 0.80 + throneDxPx;
+  const coDaisY = coDaisZone ? ((coDaisZone.yMin + coDaisZone.yMax) * 0.5 / 100) * H : H * 0.23 + throneDyPx;
+  drawCoLeaderDais(ctx, coDaisX, coDaisY, t);
 
-  // Sweeping Courtyard Penalty Corner (Bottom Left)
-  drawZoneFloorPad(ctx, W * 0.08, H * 0.84, W * 0.20, H * 0.08, 'SÂN PHẠT QUÉT LÁ', '#D97706');
+  // Sweeping Courtyard Penalty Corner (raised by 25px = -2.6% Y, synchronized with sCfg.zones.sweeping_courtyard)
+  const sweepZone = sCfg.zones?.sweeping_courtyard || {
+    xMin: 73,
+    xMax: 94,
+    yMin: 85.4,
+    yMax: 92.4,
+    label: 'Góc Phạt Quét Sân',
+  };
+  const sweepX = (sweepZone.xMin / 100) * W;
+  const sweepY = (sweepZone.yMin / 100) * H;
+  const sweepW = Math.max(W * 0.16, ((sweepZone.xMax - sweepZone.xMin) / 100) * W);
+  const sweepH = Math.max(H * 0.065, ((sweepZone.yMax - sweepZone.yMin) / 100) * H);
+  drawZoneFloorPad(ctx, sweepX, sweepY, sweepW, sweepH, 'SÂN PHẠT QUÉT LÁ', '#D97706');
 }
 
 function drawGrandThrone(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
@@ -1142,7 +1196,7 @@ function drawArticulatedDisciple(
   let showPunchWave = false;
   let showLandingDust = false;
 
-  if (anim === 'walk' || anim === 'run') {
+  if (anim === 'walk' || anim === 'run' || anim === 'depart') {
     const isRun = anim === 'run';
     const strideAmp = isRun ? 6.5 : 4.2;
     const liftAmp = isRun ? 4.2 : 2.6;
@@ -1273,6 +1327,11 @@ function drawArticulatedDisciple(
   ctx.translate(px, py);
   ctx.scale(scale, scale);
 
+  if (d.fsmState === 'departing_gate' || d.stayStatus === 'departing') {
+    const fadeProgress = d.y > 86 ? Math.max(0.25, 1 - (d.y - 86) / 10) : 0.9;
+    ctx.globalAlpha = fadeProgress;
+  }
+
   // Ground Shadow & Rank Aura Ring
   const shadowScale = Math.max(0.55, 1 - Math.abs(bounceY) * 0.025);
   ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
@@ -1294,6 +1353,21 @@ function drawArticulatedDisciple(
     ctx.beginPath();
     ctx.ellipse(0, 12, 13 + Math.sin(t * 4 + phase) * 1.5, 5.5, 0, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  if (d.stayStatus === 'expiring_soon') {
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.ellipse(0, 12, 15, 6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (d.stayStatus === 'departing' || d.fsmState === 'departing_gate') {
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.9)';
+    ctx.font = 'bold 6.5px "Plus Jakarta Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('RỜI SẢNH', 0, -29);
   }
 
   // Meditation Qi Lotus Halo when seated

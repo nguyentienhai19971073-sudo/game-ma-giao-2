@@ -114,6 +114,51 @@ async function startServer() {
   });
 
   // ==========================================================================
+  // 2B. STAY DURATION CONFIG (THỜI GIAN NGƯỜI CHƠI Ở LẠI ĐẠI ĐIỆN)
+  // ==========================================================================
+  app.get('/api/stay-config', (_req, res) => {
+    const master = obsSyncStore.getMasterConfig();
+    res.json({
+      ok: true,
+      stayDurationConfig: master.stayDurationConfig,
+    });
+  });
+
+  app.put('/api/stay-config', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized: Cần ADMIN_ACCESS_TOKEN hợp lệ.' });
+      return;
+    }
+    const updated = obsSyncStore.updateStayDurationConfig(req.body?.stayDurationConfig || req.body);
+    const obsSubset = obsSyncStore.getSettings();
+    io.emit('magiao:config_updated', updated);
+    io.emit('magiao:obs_sync_settings', obsSubset);
+    io.emit('temple:obs_sync_settings', obsSubset);
+    res.json({
+      ok: true,
+      stayDurationConfig: updated.stayDurationConfig,
+      config: updated,
+    });
+  });
+
+  app.post('/api/stay-config/reset', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+    const updated = obsSyncStore.resetStayDurationConfig();
+    const obsSubset = obsSyncStore.getSettings();
+    io.emit('magiao:config_updated', updated);
+    io.emit('magiao:obs_sync_settings', obsSubset);
+    io.emit('temple:obs_sync_settings', obsSubset);
+    res.json({
+      ok: true,
+      stayDurationConfig: updated.stayDurationConfig,
+      config: updated,
+    });
+  });
+
+  // ==========================================================================
   // 3. OBS SYNC SETTINGS
   // ==========================================================================
   app.get('/api/obs-sync', (_req, res) => {
@@ -319,6 +364,14 @@ async function startServer() {
 
     socket.on('magiao:update_config', (payload: unknown) => {
       const updated = obsSyncStore.updateMasterConfig(payload);
+      const obsSubset = obsSyncStore.getSettings();
+      io.emit('magiao:config_updated', updated);
+      io.emit('magiao:obs_sync_settings', obsSubset);
+      io.emit('temple:obs_sync_settings', obsSubset);
+    });
+
+    socket.on('magiao:update_stay_config', (payload: unknown) => {
+      const updated = obsSyncStore.updateStayDurationConfig(payload);
       const obsSubset = obsSyncStore.getSettings();
       io.emit('magiao:config_updated', updated);
       io.emit('magiao:obs_sync_settings', obsSubset);

@@ -5,6 +5,8 @@ import {
   DiagnosticLogEntry,
   DialogueCategory,
   DiscipleFSMState,
+  DiscipleStayDurationConfig,
+  DiscipleStayStatus,
   ElementType,
   GiftHistoryEntry,
   HallZoneId,
@@ -26,6 +28,8 @@ import {
   createDefaultMasterConfig,
   DEFAULT_RANK_ACCUMULATION_CONFIG,
   DEFAULT_RANKS,
+  DEFAULT_STAY_DURATION_CONFIG,
+  sanitizeStayDurationConfig,
 } from '../data/sectDefaults';
 import {
   DEFAULT_SECT_DIALOGUE_BANK,
@@ -127,6 +131,10 @@ export class SectGameManager {
     if (!this.config.rankAccumulation) {
       this.config.rankAccumulation = structuredClone(DEFAULT_RANK_ACCUMULATION_CONFIG);
     }
+    this.config.stayDurationConfig = sanitizeStayDurationConfig(this.config.stayDurationConfig);
+    this.config.playerAnimationConfig.idleTimeoutSec =
+      this.config.stayDurationConfig.inactivityTimeoutSec;
+
     this.sectLeader = {
       currentLeaderName: this.config.sectLeader.title,
       formerLeaderName: this.config.sectLeader.formerLeaderTitle,
@@ -152,14 +160,18 @@ export class SectGameManager {
     this.scheduleNextSceneCycle();
 
     voiceManager.subscribe(vSnap => {
+      const nextText = vSnap.currentItem?.text || undefined;
       const changed =
         this.sectLeader.isSpeaking !== vSnap.isSpeaking ||
         Math.abs(this.sectLeader.mouthOpenness - vSnap.mouthOpenness) > 0.04 ||
-        this.sectLeader.currentSpeechText !== (vSnap.currentItem?.text || undefined);
+        this.sectLeader.currentSpeechText !== nextText;
 
+      if (nextText && this.sectLeader.currentSpeechText !== nextText) {
+        this.sectLeader.speechStartedAt = Date.now();
+      }
       this.sectLeader.isSpeaking = vSnap.isSpeaking;
       this.sectLeader.mouthOpenness = vSnap.mouthOpenness;
-      this.sectLeader.currentSpeechText = vSnap.currentItem?.text;
+      this.sectLeader.currentSpeechText = nextText;
 
       if (vSnap.currentItem?.animationId && this.sectLeader.currentAnimation !== vSnap.currentItem.animationId) {
         this.triggerSectLeaderAnimation(vSnap.currentItem.animationId);
@@ -219,11 +231,49 @@ export class SectGameManager {
     if (!this.config.rankAccumulation) {
       this.config.rankAccumulation = structuredClone(DEFAULT_RANK_ACCUMULATION_CONFIG);
     }
+    this.config.stayDurationConfig = sanitizeStayDurationConfig(this.config.stayDurationConfig);
+    this.config.playerAnimationConfig.idleTimeoutSec =
+      this.config.stayDurationConfig.inactivityTimeoutSec;
+
     this.sectLeader.personality = this.config.sectLeader.personality;
     if (!this.sectLeader.hasCustomPlayerLeader) {
       this.sectLeader.currentLeaderName = this.config.sectLeader.title;
     }
     this.sectLeader.formerLeaderName = this.config.sectLeader.formerLeaderTitle;
+
+    // Synchronize Sect Leader position & reserved zone when thronePosition changes in Admin
+    const thronePos = this.config.sectLeader.thronePosition || { x: 50, y: 22.13 };
+    if (
+      this.sectLeader.currentAnimation !== 'walk_down_steps' &&
+      this.sectLeader.currentAnimation !== 'patrol_hall'
+    ) {
+      this.sectLeader.x = thronePos.x;
+      this.sectLeader.y = thronePos.y;
+      this.sectLeader.targetX = thronePos.x;
+      this.sectLeader.targetY = thronePos.y;
+    }
+    this.config.sceneConfig.throneReservedZone = {
+      xMin: Math.max(10, thronePos.x - 22),
+      xMax: Math.min(90, thronePos.x + 22),
+      yMin: Math.max(6, thronePos.y - 9),
+      yMax: Math.min(48, thronePos.y + 10.5),
+      label: 'Vùng Bảo Vệ Ngai Vàng Giáo Chủ',
+    };
+    this.config.sceneConfig.zones.throne_zone = {
+      xMin: Math.max(20, thronePos.x - 10),
+      xMax: Math.min(80, thronePos.x + 10),
+      yMin: Math.max(10, thronePos.y - 4),
+      yMax: Math.min(42, thronePos.y + 5),
+      label: 'Ngai Vàng Chính Điện',
+    };
+    this.config.sceneConfig.zones.co_leader_dais = {
+      xMin: Math.max(58, Math.min(82, thronePos.x + 22)),
+      xMax: Math.max(74, Math.min(94, thronePos.x + 38)),
+      yMin: Math.max(12, thronePos.y),
+      yMax: Math.min(44, thronePos.y + 7),
+      label: 'Đài Đồng Tôn Giáo Chủ (199 Xu)',
+    };
+
     voiceManager.updateConfig(this.config.voiceConfig);
     soundSynthesizer.setVolumes(
       this.config.voiceConfig.sfxVolume,
@@ -231,9 +281,21 @@ export class SectGameManager {
       this.config.voiceConfig.isMuted
     );
 
-    // Re-evaluate existing disciples' ranks when thresholds change in Admin
+    const now = Date.now();
+    const sweepRect = this.config.sceneConfig.zones.sweeping_courtyard;
+    // Re-evaluate existing disciples' ranks, positions, and apply stay duration mode
     for (const d of this.disciples.values()) {
-      if (!d.isSectLeader) {
+      if (this.config.stayDurationConfig.applyMode === 'immediate') {
+        d.assignedTimeoutSec = this.config.stayDurationConfig.inactivityTimeoutSec;
+      }
+      this.computeDiscipleStayMetrics(d, now);
+
+      if (d.isSectLeader) {
+        d.x = thronePos.x;
+        d.y = thronePos.y;
+        d.targetX = thronePos.x;
+        d.targetY = thronePos.y;
+      } else {
         const expected = this.computeRankForCoins(d.totalCoins);
         if (expected.id !== d.rankId) {
           this.applyRankToDisciple(d, expected.id);
@@ -247,8 +309,40 @@ export class SectGameManager {
             d.secondaryColor = rankDef.secondaryColor;
           }
         }
+        // Keep sweeping disciples synchronized with the Sweeping Courtyard coordinates
+        if (d.isSweepingPenalty && sweepRect) {
+          const coords = this.computeZoneCoordinates('sweeping_courtyard');
+          d.targetX = coords.x;
+          d.targetY = coords.y;
+          if (
+            d.x < sweepRect.xMin ||
+            d.x > sweepRect.xMax ||
+            d.y < sweepRect.yMin ||
+            d.y > sweepRect.yMax
+          ) {
+            d.x = coords.x;
+            d.y = coords.y;
+          }
+        } else if (d.isCoLeader) {
+          const daisCoords = this.computeZoneCoordinates('co_leader_dais');
+          d.targetX = daisCoords.x;
+          d.targetY = daisCoords.y;
+        } else if (this.isInsideThroneReservedZone(d.x, d.y, 0.8)) {
+          const clamped = this.clampToWalkableHall(d.x, d.y, false);
+          d.x = clamped.x;
+          d.y = clamped.y;
+          d.targetX = clamped.x;
+          d.targetY = clamped.y;
+        }
         this.syncDiscipleToLedger(d);
       }
+    }
+
+    for (const w of this.waitingQueue) {
+      if (this.config.stayDurationConfig.applyMode === 'immediate') {
+        w.assignedTimeoutSec = this.config.stayDurationConfig.inactivityTimeoutSec;
+      }
+      this.computeDiscipleStayMetrics(w, now);
     }
 
     if (this.config.rankAccumulation.mode === 'persistent') {
@@ -284,10 +378,10 @@ export class SectGameManager {
     this.sectLeader.animationDurationMs = durationMs;
     this.sectLeader.expression = animDef?.expression || 'arrogant';
 
-    const thronePos = this.config.sectLeader.thronePosition;
+    const thronePos = this.config.sectLeader.thronePosition || { x: 50, y: 22.13 };
     if (animId === 'walk_down_steps' || animId === 'patrol_hall') {
-      this.sectLeader.targetX = 50 + (Math.random() * 14 - 7);
-      this.sectLeader.targetY = 27.5;
+      this.sectLeader.targetX = thronePos.x + (Math.random() * 14 - 7);
+      this.sectLeader.targetY = Math.min(42, thronePos.y + 8.5);
     } else if (animId === 'return_to_throne' || animId === 'sit_throne_pose' || animId === 'idle_throne') {
       this.sectLeader.targetX = thronePos.x;
       this.sectLeader.targetY = thronePos.y;
@@ -336,6 +430,8 @@ export class SectGameManager {
       line.linkedAnimation ||
       this.pickDefaultAnimationForCategory(category);
 
+    this.sectLeader.currentSpeechText = spokenText;
+    this.sectLeader.speechStartedAt = Date.now();
     this.triggerSectLeaderAnimation(animToPlay);
 
     voiceManager.enqueue({
@@ -586,7 +682,13 @@ export class SectGameManager {
     now: number,
     preferMovement = false
   ) {
-    if (disciple.isSweepingPenalty || disciple.isSectLeader) return;
+    if (
+      disciple.isSweepingPenalty ||
+      disciple.isSectLeader ||
+      disciple.fsmState === 'departing_gate'
+    ) {
+      return;
+    }
 
     const cfg = this.config.playerAnimationConfig;
     const [minIntervalSec, maxIntervalSec] = cfg.decisionIntervalRangeSec || [3, 8];
@@ -790,6 +892,34 @@ export class SectGameManager {
     }
   }
 
+  /**
+   * Refreshes a disciple's inactivity countdown ONLY on valid user interaction
+   * (valid comment or valid TikTok gift). Also cancels gate departure if the user
+   * interacts while walking out.
+   */
+  private refreshDiscipleInteraction(disciple: SectDisciple, now = Date.now()) {
+    const timeoutSec =
+      this.config.stayDurationConfig?.inactivityTimeoutSec ||
+      DEFAULT_STAY_DURATION_CONFIG.inactivityTimeoutSec;
+    disciple.lastActiveAt = now;
+    disciple.lastInteractionAt = now;
+    disciple.assignedTimeoutSec = timeoutSec;
+    disciple.extraExtendedSec = 0;
+    disciple.stayStatus = 'active';
+    disciple.remainingStaySec = timeoutSec;
+
+    if (disciple.fsmState === 'departing_gate') {
+      disciple.departStartedAt = undefined;
+      disciple.departDurationMs = undefined;
+      this.assignHallSlotAndWalkIn(disciple);
+      this.addLog(
+        'comment',
+        `${disciple.displayName} tương tác kịp thời và quay lại Đại Điện!`,
+        `Đã làm mới bộ đếm thời gian ở lại (${timeoutSec}s).`
+      );
+    }
+  }
+
   public handleCommentEvent(event: TikTokLiveEvent): {
     disciple: SectDisciple | null;
     isNewSpawn: boolean;
@@ -812,7 +942,8 @@ export class SectGameManager {
     let releasedFromSweep = false;
 
     if (!disciple) {
-      // Spawn new disciple at Gate (no duplicate user IDs possible)
+      // Spawn new disciple (or restore returning disciple from ledger) at Gate
+      const hadSavedLedger = this.playerLedger.has(userId);
       disciple = this.createNewDisciple(event);
       isNewSpawn = true;
 
@@ -820,10 +951,15 @@ export class SectGameManager {
       if (this.disciples.size < maxCap) {
         this.disciples.set(userId, disciple);
         this.assignHallSlotAndWalkIn(disciple);
+        this.syncDiscipleToLedger(disciple);
         this.addLog(
           'comment',
-          `Tân đệ tử nhập môn: ${disciple.displayName}`,
-          `Bình luận đầu tiên: "${bubbleText || 'Chào Giáo Chủ'}"`
+          hadSavedLedger
+            ? `${disciple.displayName} tái xuất Đại Điện [${disciple.rankName}]`
+            : `Tân đệ tử nhập môn: ${disciple.displayName}`,
+          hadSavedLedger
+            ? `Khôi phục ${disciple.totalCoins} xu & cấp ${disciple.rankName}, đi từ Cổng vào Đại Điện: "${bubbleText || 'Chào Giáo Chủ'}"`
+            : `Bình luận đầu tiên: "${bubbleText || 'Chào Giáo Chủ'}"`
         );
 
         if (this.disciples.size <= 15 || Math.random() < 0.35) {
@@ -837,6 +973,7 @@ export class SectGameManager {
       } else {
         // Put in overflow waiting queue
         this.waitingQueue.push(disciple);
+        this.syncDiscipleToLedger(disciple);
         this.addLog(
           'comment',
           `Hàng chờ Đại Điện (${this.waitingQueue.length}): ${disciple.displayName}`,
@@ -853,7 +990,8 @@ export class SectGameManager {
         disciple.avatarUrl = event.avatarUrl;
       }
       disciple.commentCount += 1;
-      disciple.lastActiveAt = Date.now();
+      this.refreshDiscipleInteraction(disciple, Date.now());
+      this.syncDiscipleToLedger(disciple);
 
       // Check if disciple was in Sweeping Courtyard penalty -> immediately restore to Main Hall on ANY comment!
       if (disciple.isSweepingPenalty) {
@@ -906,10 +1044,8 @@ export class SectGameManager {
   private createNewDisciple(event: TikTokLiveEvent): SectDisciple {
     const userId = String(event.userId || event.uniqueId);
     const displayName = String(event.nickname || event.uniqueId || userId).trim();
-    const savedLedger =
-      this.config.rankAccumulation?.enabled !== false
-        ? this.playerLedger.get(userId)
-        : undefined;
+    // Always preserve and restore player's accumulated coins, rank, and costume from ledger
+    const savedLedger = this.playerLedger.get(userId);
 
     const initialCoins = savedLedger ? savedLedger.totalCoins : 0;
     const initialGiftCount = savedLedger ? savedLedger.giftCount : 0;
@@ -925,6 +1061,9 @@ export class SectGameManager {
     const hash = Array.from(userId).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
     const gender: 'nam' | 'nu' = hash % 2 === 0 ? 'nam' : 'nu';
     const now = Date.now();
+    const timeoutSec =
+      this.config.stayDurationConfig?.inactivityTimeoutSec ||
+      DEFAULT_STAY_DURATION_CONFIG.inactivityTimeoutSec;
 
     return {
       userId,
@@ -941,6 +1080,11 @@ export class SectGameManager {
       likeCount: 0,
       joinedAt: now,
       lastActiveAt: now,
+      lastInteractionAt: now,
+      assignedTimeoutSec: timeoutSec,
+      extraExtendedSec: 0,
+      stayStatus: 'active',
+      remainingStaySec: timeoutSec,
       lastCommandAt: 0,
       x: spawnX,
       y: spawnY,
@@ -1372,7 +1516,7 @@ export class SectGameManager {
       disciple.totalCoins = addedCoins;
     }
     disciple.giftCount += deltaRepeatCount;
-    disciple.lastActiveAt = Date.now();
+    this.refreshDiscipleInteraction(disciple, Date.now());
 
     const throneRankConfig = this.config.ranks.find(r => r.id === 'tan_giao_chu');
     const supremeMinCoins = throneRankConfig?.minCoins || 1000;
@@ -1635,6 +1779,7 @@ export class SectGameManager {
       disciple.targetY = Math.min(58, Math.max(33, spot.y));
       disciple.direction = 'rear';
     }
+    this.syncDiscipleToLedger(disciple);
   }
 
   public handleLikeEvent(event: TikTokLiveEvent) {
@@ -1642,7 +1787,7 @@ export class SectGameManager {
     const disciple = this.disciples.get(userId);
     if (disciple) {
       disciple.likeCount += Math.max(1, Number(event.likeCount || 1));
-      disciple.lastActiveAt = Date.now();
+      // Likes do NOT reset inactivity stay duration timer (only valid comments & gifts do)
       this.notify();
     }
   }
@@ -1661,12 +1806,12 @@ export class SectGameManager {
     this.isTransitioningScene = false;
 
     const participants = Array.from(this.disciples.values())
-      .filter(d => !d.isSweepingPenalty && !d.isSectLeader)
+      .filter(d => !d.isSweepingPenalty && !d.isSectLeader && d.fsmState !== 'departing_gate')
       .map(d => d.userId);
 
     // Gather active disciples into neat martial formation ONLY while in the mini-game
     const activeList = Array.from(this.disciples.values()).filter(
-      d => !d.isSweepingPenalty && !d.isSectLeader
+      d => !d.isSweepingPenalty && !d.isSectLeader && d.fsmState !== 'departing_gate'
     );
     const cols = Math.max(4, Math.min(10, Math.ceil(Math.sqrt(activeList.length * 1.3))));
     const rows = Math.max(1, Math.ceil(activeList.length / cols));
@@ -1811,6 +1956,7 @@ export class SectGameManager {
 
     this.miniGame.isVictory = isVictory;
     this.miniGame.phase = 'result';
+    this.miniGame.resultStartedAt = Date.now();
 
     const nonCompletedIds = this.miniGame.participantUserIds.filter(
       id => !this.miniGame.completedUserIds.includes(id)
@@ -1868,15 +2014,16 @@ export class SectGameManager {
         : 'Không có đệ tử nào bị phạt quét sân.'
     );
 
-    // Return to Main Hall and dissolve formation into Free Roam
+    // Return to Main Hall and dissolve formation into Free Roam after popupDurationMs (default 4000ms)
     this.scheduleNextSceneCycle();
+    const popupDurMs = Math.max(1000, this.config.overlayConfig?.popupDurationMs || 4000);
     if (typeof window !== 'undefined') {
       window.setTimeout(() => {
         this.miniGame.isActive = false;
         this.activeScene = 'main_hall';
         this.disperseDisciplesToFreeRoam();
         this.notify();
-      }, 4500);
+      }, popupDurMs);
     } else {
       this.miniGame.isActive = false;
       this.activeScene = 'main_hall';
@@ -1893,7 +2040,7 @@ export class SectGameManager {
   public disperseDisciplesToFreeRoam() {
     const now = Date.now();
     for (const d of this.disciples.values()) {
-      if (d.isSweepingPenalty || d.isSectLeader) continue;
+      if (d.isSweepingPenalty || d.isSectLeader || d.fsmState === 'departing_gate') continue;
       if (d.isCoLeader) {
         const dais = this.computeZoneCoordinates('co_leader_dais');
         d.zone = 'co_leader_dais';
@@ -1935,6 +2082,320 @@ export class SectGameManager {
 
     this.addLog('scene', `Chuyển cảnh sang: ${next === 'main_hall' ? 'Đại Điện Ma Giáo' : 'Sân Luyện Võ'}`, 'Chuyển cảnh trực tiếp');
     this.notify();
+  }
+
+  // ==========================================================================
+  // PLAYER STAY DURATION & AUTO-DEPARTURE LIFECYCLE
+  // ==========================================================================
+
+  /**
+   * Computes remaining stay time and stayStatus ('active' | 'expiring_soon' | 'departing')
+   * for a single disciple without resetting their interaction clock.
+   */
+  public computeDiscipleStayMetrics(d: SectDisciple, now: number = Date.now()) {
+    const cfg = this.config.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG;
+    if (d.fsmState === 'departing_gate' || d.stayStatus === 'departing') {
+      d.stayStatus = 'departing';
+      const elapsedDepartSec = d.departStartedAt ? Math.max(0, (now - d.departStartedAt) / 1000) : 0;
+      const totalDepartSec = Math.max(1, (d.departDurationMs || cfg.departAnimationDurationSec * 1000) / 1000);
+      d.remainingStaySec = Math.max(0, Math.ceil(totalDepartSec - elapsedDepartSec));
+      return;
+    }
+
+    const baseTimeoutSec =
+      cfg.applyMode === 'immediate'
+        ? cfg.inactivityTimeoutSec
+        : d.assignedTimeoutSec || cfg.inactivityTimeoutSec || 420;
+    const effectiveTimeoutSec = Math.max(5, baseTimeoutSec + (d.extraExtendedSec || 0));
+    const lastInteract = d.lastInteractionAt || d.joinedAt || now;
+    const elapsedSec = Math.max(0, (now - lastInteract) / 1000);
+    const remainingSec = Math.max(0, Math.ceil(effectiveTimeoutSec - elapsedSec));
+    d.remainingStaySec = remainingSec;
+
+    if (!cfg.autoDepartEnabled) {
+      d.stayStatus = 'active';
+      return;
+    }
+
+    if (
+      cfg.warningBeforeDepartEnabled &&
+      remainingSec > 0 &&
+      remainingSec <= Math.min(cfg.warningBeforeDepartSec, Math.max(1, effectiveTimeoutSec - 1))
+    ) {
+      d.stayStatus = 'expiring_soon';
+    } else {
+      d.stayStatus = 'active';
+    }
+  }
+
+  /**
+   * Safely removes a departing player from any active mini-game participant/completed/failed lists
+   * and recalculates completion percentage so the mini-game continues smoothly.
+   */
+  private removeDiscipleFromMiniGameSafely(userId: string) {
+    if (!this.miniGame.isActive) return;
+    const beforeLen = this.miniGame.participantUserIds.length;
+    this.miniGame.participantUserIds = this.miniGame.participantUserIds.filter(id => id !== userId);
+    this.miniGame.completedUserIds = this.miniGame.completedUserIds.filter(id => id !== userId);
+    this.miniGame.failedUserIds = this.miniGame.failedUserIds.filter(id => id !== userId);
+    if (this.miniGame.participantUserIds.length !== beforeLen) {
+      const total = Math.max(1, this.miniGame.participantUserIds.length);
+      this.miniGame.completionPct =
+        this.miniGame.participantUserIds.length === 0
+          ? 0
+          : Math.round((this.miniGame.completedUserIds.length / total) * 100);
+    }
+  }
+
+  /**
+   * Initiates departure for a disciple whose inactivity timer has expired:
+   * 1. Stops autonomous behavior
+   * 2. Safely exits active mini-game if participating
+   * 3. Runs walking-out-to-gate animation (or finalizes immediately if walkToGateOnDepart is disabled)
+   */
+  private initiateDiscipleDeparture(d: SectDisciple, now: number = Date.now()) {
+    const cfg = this.config.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG;
+    this.syncDiscipleToLedger(d);
+    if (this.config.rankAccumulation?.mode === 'persistent') {
+      this.savePersistentLedger();
+    }
+
+    // Remove safely from mini-game if active
+    this.removeDiscipleFromMiniGameSafely(d.userId);
+
+    if (!cfg.walkToGateOnDepart) {
+      this.finalizeDiscipleDeparture(d, now);
+      return;
+    }
+
+    const departDurationMs = Math.max(1000, Math.min(15000, (cfg.departAnimationDurationSec || 4) * 1000));
+    d.fsmState = 'departing_gate';
+    d.stayStatus = 'departing';
+    d.animation = 'depart';
+    d.direction = 'front';
+    d.meditationPhase = 'none';
+    d.isSweepingPenalty = false;
+    d.zone = 'entry_gate';
+    d.targetX = 50 + (Math.random() * 6 - 3);
+    d.targetY = 94;
+    d.departStartedAt = now;
+    d.departDurationMs = departDurationMs;
+    d.actionStartedAt = now;
+    d.actionDurationMs = departDurationMs;
+    d.nextDecisionAt = now + departDurationMs + 60000;
+    d.remainingStaySec = Math.ceil(departDurationMs / 1000);
+
+    this.addLog(
+      'system',
+      `${d.displayName} hết thời gian ở lại — đang đi ra cổng`,
+      `Không tương tác trong ${Math.round((now - (d.lastInteractionAt || d.joinedAt)) / 1000)}s. Bảo lưu ${d.totalCoins} xu (${d.rankName}).`
+    );
+  }
+
+  /**
+   * Finalizes departure: removes character from active hall display and promotes next waiting player.
+   * Never deletes cumulative coins or rank in playerLedger.
+   */
+  private finalizeDiscipleDeparture(d: SectDisciple, _now: number = Date.now()) {
+    this.syncDiscipleToLedger(d);
+    if (this.config.rankAccumulation?.mode === 'persistent') {
+      this.savePersistentLedger();
+    }
+    this.removeDiscipleFromMiniGameSafely(d.userId);
+    this.disciples.delete(d.userId);
+
+    if (this.sectLeader.currentLeaderUserId === d.userId) {
+      this.sectLeader.hasCustomPlayerLeader = false;
+      this.sectLeader.currentLeaderName = this.config.sectLeader.title;
+      this.sectLeader.currentLeaderUserId = undefined;
+    }
+
+    this.addLog(
+      'system',
+      `${d.displayName} đã rời Đại Điện`,
+      `Giải phóng vị trí sảnh. Hồ sơ bảo lưu: ${d.totalCoins} xu • ${d.rankName}.`
+    );
+
+    // Promote waiting queue disciples into freed hall slots
+    const maxCap = this.config.sceneConfig.maxConcurrentPlayers || 80;
+    while (this.disciples.size < maxCap && this.waitingQueue.length > 0) {
+      const next = this.waitingQueue.shift()!;
+      const nowPromote = Date.now();
+      next.lastInteractionAt = nowPromote;
+      next.lastActiveAt = nowPromote;
+      next.assignedTimeoutSec =
+        this.config.stayDurationConfig?.inactivityTimeoutSec ||
+        this.config.playerAnimationConfig.idleTimeoutSec ||
+        420;
+      next.extraExtendedSec = 0;
+      next.stayStatus = 'active';
+      next.remainingStaySec = next.assignedTimeoutSec;
+      this.disciples.set(next.userId, next);
+      this.assignHallSlotAndWalkIn(next);
+      this.addLog(
+        'comment',
+        `${next.displayName} từ hàng chờ bước vào Đại Điện`,
+        `Thay thế vị trí trống vừa giải phóng.`
+      );
+    }
+  }
+
+  /**
+   * Centralized lifecycle check executed inside tick() for all active disciples.
+   */
+  private updateAllDisciplesStayLifecycle(now: number = Date.now()) {
+    const cfg = this.config.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG;
+    const all = Array.from(this.disciples.values());
+
+    for (const d of all) {
+      if (d.fsmState === 'departing_gate' || d.stayStatus === 'departing') {
+        const started = d.departStartedAt || d.actionStartedAt || now;
+        const dur = d.departDurationMs || Math.max(1000, (cfg.departAnimationDurationSec || 4) * 1000);
+        const distToGate = Math.hypot((d.targetX || 50) - d.x, (d.targetY || 94) - d.y);
+        if (now - started >= dur || (distToGate <= 1.2 && now - started >= Math.min(1200, dur * 0.5))) {
+          this.finalizeDiscipleDeparture(d, now);
+        } else {
+          this.computeDiscipleStayMetrics(d, now);
+        }
+        continue;
+      }
+
+      this.computeDiscipleStayMetrics(d, now);
+
+      if (cfg.autoDepartEnabled && (d.remainingStaySec ?? 1) <= 0) {
+        this.initiateDiscipleDeparture(d, now);
+      }
+    }
+  }
+
+  /**
+   * Updates stayDurationConfig from Admin or Test tools and applies immediately or to new players only.
+   */
+  public setStayDurationConfig(patch: Partial<DiscipleStayDurationConfig>): DiscipleStayDurationConfig {
+    const merged = sanitizeStayDurationConfig(
+      patch,
+      this.config.stayDurationConfig || DEFAULT_STAY_DURATION_CONFIG
+    );
+    this.config.stayDurationConfig = merged;
+    this.config.playerAnimationConfig.idleTimeoutSec = merged.inactivityTimeoutSec;
+
+    const now = Date.now();
+    if (merged.applyMode === 'immediate') {
+      for (const d of this.disciples.values()) {
+        if (d.fsmState !== 'departing_gate') {
+          d.assignedTimeoutSec = merged.inactivityTimeoutSec;
+        }
+        this.computeDiscipleStayMetrics(d, now);
+      }
+      this.updateAllDisciplesStayLifecycle(now);
+    } else {
+      for (const d of this.disciples.values()) {
+        this.computeDiscipleStayMetrics(d, now);
+      }
+    }
+
+    this.addLog(
+      'system',
+      `Cập nhật Thời Gian Hoạt Động: ${merged.inactivityTimeoutMinutes} phút (${merged.inactivityTimeoutSec}s)`,
+      `Tự rời sảnh: ${merged.autoDepartEnabled ? 'BẬT' : 'TẮT'} • Đi ra cổng: ${merged.walkToGateOnDepart ? `${merged.departAnimationDurationSec}s` : 'TẮT'} • Cảnh báo: ${merged.warningBeforeDepartEnabled ? `Trước ${merged.warningBeforeDepartSec}s` : 'TẮT'} • Áp dụng: ${merged.applyMode === 'immediate' ? 'Ngay cho người đang ở sảnh' : 'Chỉ người mới'}`
+    );
+    this.notify();
+    return merged;
+  }
+
+  /**
+   * Restores default stay duration config (7 minutes = 420 seconds).
+   */
+  public resetStayDurationConfig(): DiscipleStayDurationConfig {
+    return this.setStayDurationConfig(structuredClone(DEFAULT_STAY_DURATION_CONFIG));
+  }
+
+  /**
+   * Extends remaining stay time for a specific user (or all active users if userId omitted) in Admin/Demo mode.
+   */
+  public extendDiscipleStayTime(userId?: string, addSeconds: number = 120, reason: string = 'Admin gia hạn'): number {
+    const now = Date.now();
+    const deltaSec = Math.max(5, Math.min(3600, Math.round(addSeconds)));
+    let affected = 0;
+
+    for (const d of this.disciples.values()) {
+      if (userId && d.userId !== userId) continue;
+      if (d.fsmState === 'departing_gate') {
+        // Cancel departure and return to hall free roam!
+        d.fsmState = 'free_roam_stroll';
+        d.stayStatus = 'active';
+        d.departStartedAt = undefined;
+        d.departDurationMs = undefined;
+        const slot = this.sampleFreeRoamPosition({ excludeUserId: d.userId });
+        d.zone = slot.zone;
+        d.targetX = slot.x;
+        d.targetY = slot.y;
+        d.animation = 'walk';
+        d.lastInteractionAt = now;
+        d.extraExtendedSec = 0;
+      } else {
+        d.extraExtendedSec = (d.extraExtendedSec || 0) + deltaSec;
+      }
+      this.computeDiscipleStayMetrics(d, now);
+      affected += 1;
+    }
+
+    if (affected > 0) {
+      this.addLog(
+        'system',
+        userId
+          ? `Gia hạn +${deltaSec}s cho ${this.disciples.get(userId)?.displayName || userId}`
+          : `Gia hạn +${deltaSec}s cho toàn bộ ${affected} đệ tử`,
+        `Lý do: ${reason}`
+      );
+      this.notify();
+    }
+    return affected;
+  }
+
+  /**
+   * Fast-forwards inactivity time for testing (shifts lastInteractionAt backward by `seconds`)
+   * and runs lifecycle checks immediately so Admin can test warning & departure in seconds.
+   */
+  public simulateTimeElapsed(seconds: number, targetUserId?: string) {
+    const shiftMs = Math.max(1, Math.round(seconds)) * 1000;
+    const now = Date.now();
+    for (const d of this.disciples.values()) {
+      if (targetUserId && d.userId !== targetUserId) continue;
+      if (d.fsmState === 'departing_gate') {
+        d.departStartedAt = (d.departStartedAt || now) - shiftMs;
+      } else {
+        d.lastInteractionAt = (d.lastInteractionAt || d.joinedAt || now) - shiftMs;
+      }
+    }
+    this.updateAllDisciplesStayLifecycle(now);
+    this.addLog(
+      'system',
+      `Giả lập trôi qua +${Math.round(seconds)} giây không tương tác`,
+      targetUserId ? `Áp dụng cho ID: ${targetUserId}` : `Áp dụng cho toàn bộ đệ tử trong sảnh.`
+    );
+    this.notify();
+  }
+
+  /**
+   * Returns a human-readable Vietnamese label for a disciple's current activity.
+   */
+  public describeDiscipleCurrentActivity(d: SectDisciple): string {
+    if (d.fsmState === 'departing_gate' || d.animation === 'depart') return 'Đang đi ra cổng rời sảnh';
+    if (d.isSweepingPenalty || d.animation === 'sweep_floor') return 'Bị phạt quét sân';
+    if (d.fsmState === 'walk_in_hall') return 'Đi từ cổng vào đại điện';
+    if (d.fsmState === 'bow_sect_leader' || d.animation === 'bow') return 'Chào bái kiến Giáo Chủ';
+    if (d.animation === 'meditate') return 'Ngồi thiền vận công';
+    if (d.animation === 'stand_up') return 'Đứng dậy sau thiền';
+    if (d.animation === 'run') return 'Chạy khinh công';
+    if (d.animation === 'walk') {
+      return d.zone === 'central_aisle' ? 'Đi dạo lối chính giữa' : 'Đi dạo trong đại điện';
+    }
+    if (d.animation === 'combo_kungfu' || d.animation === 'cast_seal') return 'Múa võ / Luyện công';
+    if (d.animation === 'punch' || d.animation === 'kick') return 'Luyện quyền cước';
+    if (d.animation === 'jump' || d.animation === 'dodge') return 'Nhảy / Thân pháp';
+    if (d.animation === 'clap' || d.animation === 'celebrate') return 'Hoan hô cổ vũ / Thụ lễ';
+    return d.zone === 'central_aisle' ? 'Đứng giữa đại điện' : 'Đứng quan sát sảnh';
   }
 
   // ==========================================================================
@@ -1982,7 +2443,9 @@ export class SectGameManager {
         if (r < 0.62) {
           this.triggerSectLeaderSpeech('silly_evil_boast', {}, 'boast_idle');
         } else {
-          const allDisciples = Array.from(this.disciples.values());
+          const allDisciples = Array.from(this.disciples.values()).filter(
+            d => d.fsmState !== 'departing_gate'
+          );
           const pick = allDisciples[Math.floor(Math.random() * allDisciples.length)];
           if (pick) {
             this.triggerSectLeaderSpeech(
@@ -2040,6 +2503,9 @@ export class SectGameManager {
       }
     }
 
+    // 4b. Check & Update Player Stay Duration / Auto-Departure Lifecycle
+    this.updateAllDisciplesStayLifecycle(now);
+
     // 5. Update Disciples Movement, Footstep Phase, & Arrival Transitions
     const animCfg = this.config.playerAnimationConfig;
     const walkSpeed = 13.5 * (animCfg.walkSpeedMultiplier || 1.0);
@@ -2075,7 +2541,10 @@ export class SectGameManager {
         // Advance articulated leg stride phase proportional to actual distance walked (no sliding!)
         d.stepPhase = ((d.stepPhase || 0) + step * 1.45) % (Math.PI * 2);
 
-        if (d.animation !== 'run' && d.animation !== 'walk' && !this.miniGame.isActive) {
+        if (d.fsmState === 'departing_gate') {
+          d.animation = 'depart';
+          d.direction = 'front';
+        } else if (d.animation !== 'run' && d.animation !== 'walk' && !this.miniGame.isActive) {
           d.animation = 'walk';
         }
 
@@ -2083,17 +2552,22 @@ export class SectGameManager {
         // Moving up toward Throne (dy < 0) -> 'rear'
         // Moving down toward Gate (dy > 0) -> 'front'
         // Moving horizontally -> 'left' / 'right'
-        if (Math.abs(dx) > Math.abs(dy) * 1.15) {
-          d.direction = dx > 0 ? 'right' : 'left';
-        } else {
-          d.direction = dy < 0 ? 'rear' : 'front';
+        if (d.fsmState !== 'departing_gate') {
+          if (Math.abs(dx) > Math.abs(dy) * 1.15) {
+            d.direction = dx > 0 ? 'right' : 'left';
+          } else {
+            d.direction = dy < 0 ? 'rear' : 'front';
+          }
         }
       } else {
         // Reached target coordinate -> sync target to current position so character NEVER snaps back
         d.targetX = d.x;
         d.targetY = d.y;
 
-        if (d.fsmState === 'walk_in_hall') {
+        if (d.fsmState === 'departing_gate') {
+          this.finalizeDiscipleDeparture(d, now);
+          continue;
+        } else if (d.fsmState === 'walk_in_hall') {
           d.fsmState = 'bow_sect_leader';
           d.animation = 'bow';
           d.direction = 'rear';
@@ -2147,15 +2621,28 @@ export class SectGameManager {
     }
 
     // 6. Radial Anti-Overlap Separation & Obstacle Avoidance (in Main Hall)
+    const remainingDisciples = Array.from(this.disciples.values());
     if (this.activeScene === 'main_hall' && !this.miniGame.isActive) {
       const minSep = Math.max(2.5, Math.min(10, animCfg.minSeparationDist || 5.2));
-      for (let i = 0; i < allDisciples.length; i++) {
-        const a = allDisciples[i];
-        if (a.isSweepingPenalty || a.isSectLeader || a.fsmState === 'walk_in_hall') continue;
+      for (let i = 0; i < remainingDisciples.length; i++) {
+        const a = remainingDisciples[i];
+        if (
+          a.isSweepingPenalty ||
+          a.isSectLeader ||
+          a.fsmState === 'walk_in_hall' ||
+          a.fsmState === 'departing_gate'
+        )
+          continue;
 
-        for (let j = i + 1; j < allDisciples.length; j++) {
-          const b = allDisciples[j];
-          if (b.isSweepingPenalty || b.isSectLeader || b.fsmState === 'walk_in_hall') continue;
+        for (let j = i + 1; j < remainingDisciples.length; j++) {
+          const b = remainingDisciples[j];
+          if (
+            b.isSweepingPenalty ||
+            b.isSectLeader ||
+            b.fsmState === 'walk_in_hall' ||
+            b.fsmState === 'departing_gate'
+          )
+            continue;
 
           const sdx = a.x - b.x;
           const sdy = a.y - b.y;
@@ -2211,16 +2698,16 @@ export class SectGameManager {
         Math.min(
           80,
           animCfg.maxConcurrentMovers ||
-            Math.ceil(allDisciples.length * (animCfg.activeRatioTarget || 0.28))
+            Math.ceil(remainingDisciples.length * (animCfg.activeRatioTarget || 0.28))
         )
       );
       const minDesiredMovers = Math.min(
         maxMovers,
-        Math.max(1, Math.floor(allDisciples.length * (animCfg.activeRatioTarget || 0.28) * 0.75))
+        Math.max(1, Math.floor(remainingDisciples.length * (animCfg.activeRatioTarget || 0.28) * 0.75))
       );
 
-      for (const d of allDisciples) {
-        if (d.isSweepingPenalty || d.isSectLeader) continue;
+      for (const d of remainingDisciples) {
+        if (d.isSweepingPenalty || d.isSectLeader || d.fsmState === 'departing_gate') continue;
         if (now >= (d.nextDecisionAt || 0)) {
           const canStartMove = currentMovers < maxMovers;
           const shouldPreferMove = currentMovers < minDesiredMovers;
@@ -2336,7 +2823,7 @@ export class SectGameManager {
     const now = Date.now();
     const list = Array.from(this.disciples.values());
     list.forEach((d, idx) => {
-      if (d.isSweepingPenalty || d.isSectLeader) return;
+      if (d.isSweepingPenalty || d.isSectLeader || d.fsmState === 'departing_gate') return;
       if (d.isCoLeader) {
         const dais = this.computeZoneCoordinates('co_leader_dais');
         d.zone = 'co_leader_dais';
@@ -2376,7 +2863,7 @@ export class SectGameManager {
     const now = Date.now();
     let idx = 0;
     for (const d of this.disciples.values()) {
-      if (d.isSweepingPenalty || d.isSectLeader) continue;
+      if (d.isSweepingPenalty || d.isSectLeader || d.fsmState === 'departing_gate') continue;
       this.assignNextAutonomousAction(d, now, idx % 3 === 0);
       idx += 1;
     }
@@ -2737,7 +3224,7 @@ export class SectGameManager {
   public triggerMassPlayerAnimation(anim: PlayerAnimationState) {
     const now = Date.now();
     for (const d of this.disciples.values()) {
-      if (!d.isSweepingPenalty && !d.isSectLeader) {
+      if (!d.isSweepingPenalty && !d.isSectLeader && d.fsmState !== 'departing_gate') {
         d.animation = anim;
         d.targetX = d.x;
         d.targetY = d.y;
@@ -2792,7 +3279,12 @@ export class SectGameManager {
   }
 
   public getSnapshot(): GameStateSnapshot {
+    const now = Date.now();
     const allDisciples = Array.from(this.disciples.values());
+    for (const d of allDisciples) {
+      this.computeDiscipleStayMetrics(d, now);
+    }
+
     const sweepingDisciples = allDisciples.filter(d => d.isSweepingPenalty).slice(0, 5);
     const elderLeaderboard = [...allDisciples]
       .filter(d => d.totalCoins > 0)
@@ -2825,7 +3317,7 @@ export class SectGameManager {
 
     const nextSceneCountdownSec = Math.max(
       0,
-      Math.ceil((this.nextSceneSwitchAt - Date.now()) / 1000)
+      Math.ceil((this.nextSceneSwitchAt - now) / 1000)
     );
 
     return {
